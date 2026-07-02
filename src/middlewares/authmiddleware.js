@@ -2,13 +2,15 @@ import jwt from "jsonwebtoken";
 
 export function auth(req, res, next) {
 
-    const token = req.headers.authorization;
+    const authHeader = req.headers.authorization;
 
-    if (!token) {
+    if (!authHeader) {
         return res.status(401).json({
             message: "Token missing"
         });
     }
+
+    const token = authHeader.split(" ")[1];
 
     try {
 
@@ -28,4 +30,5 @@ export function auth(req, res, next) {
         });
 
     }
+
 }

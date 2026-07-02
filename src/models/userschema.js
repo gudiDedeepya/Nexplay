@@ -1,5 +1,5 @@
 import mongoose ,{model,Schema} from "mongoose";
-mongoose.connect("mongodb://localhost:27017/NEXPLAY")
+mongoose.connect("mongodb+srv://gudidedeepya_db_user:a7ZfCSeymu4dQkpz@cluster0.dcempsn.mongodb.net/Nexplay")
 .then(() => {
     console.log("MongoDB Connected");
 })

@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import cors from "cors";
 import {auth} from "./middlewares/authmiddleware.js";
 import { userModel,venueModel,gameModel,bookingModel} from "./models/userschema.js";
 const SLOTS = [
@@ -12,6 +13,9 @@ const SLOTS = [
 ];
 
 const app=express();
+
+app.use(cors());
+app.use(express.json());
 
 
 app.use(express.json());
@@ -617,6 +621,134 @@ async (req,res)=>{
 
         return res.status(500).json({
             message:"Internal server error"
+        });
+
+    }
+
+});
+
+app.get("/api/v1/me", auth, async (req, res) => {
+
+    try {
+
+        const user = await userModel
+        .findById(req.userId)
+        .select("-password");
+
+        if (!user) {
+
+            return res.status(404).json({
+                message: "User not found"
+            });
+
+        }
+
+        return res.status(200).json({
+
+            user
+
+        });
+
+    }
+
+    catch(error){
+
+        console.log(error);
+
+        return res.status(500).json({
+            message:"Internal server error"
+        });
+
+    }
+
+});
+
+app.get("/api/v1/my-bookings", auth, async (req, res) => {
+
+    try {
+
+        const bookings = await bookingModel
+            .find({
+                userId: req.userId
+            })
+            .populate("venueId");
+
+        return res.status(200).json({
+
+            bookings
+
+        });
+
+    }
+
+    catch (error) {
+
+        console.log(error);
+
+        return res.status(500).json({
+            message: "Internal server error"
+        });
+
+    }
+
+});
+
+app.get("/api/v1/my-games", auth, async (req, res) => {
+
+    try {
+
+        const games = await gameModel
+            .find({
+                organizerId: req.userId
+            })
+            .populate({
+                path: "bookingId",
+                populate: {
+                    path: "venueId"
+                }
+            });
+
+        return res.status(200).json({
+            games
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        return res.status(500).json({
+            message: "Internal server error"
+        });
+
+    }
+
+});
+
+app.get("/api/v1/joined-games", auth, async (req, res) => {
+
+    try {
+
+        const games = await gameModel
+            .find({
+                joinedPlayers: req.userId
+            })
+            .populate({
+                path: "bookingId",
+                populate: {
+                    path: "venueId"
+                }
+            });
+
+        return res.status(200).json({
+            games
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        return res.status(500).json({
+            message: "Internal server error"
         });
 
     }
