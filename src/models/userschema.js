@@ -6,6 +6,10 @@ mongoose.connect("mongodb+srv://gudidedeepya_db_user:a7ZfCSeymu4dQkpz@cluster0.d
 .catch((err) => {
     console.log("not connected");
 });
+
+
+
+
 const userSchema= new Schema({
     name:{type:String,required:true},
     email:{type:String,required:true,unique:true},

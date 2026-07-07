@@ -106,6 +106,36 @@ app.get("/api/v1/me",auth,(req,res)=>{
 
 });
 
+app.get("/api/v1/venues/:venueId", async (req, res) => {
+
+    try {
+
+        const venue = await venueModel.findById(req.params.venueId);
+
+        if (!venue) {
+
+            return res.status(404).json({
+                message: "Venue not found"
+            });
+
+        }
+
+        return res.status(200).json({
+            venue
+        });
+
+    } catch (error) {
+
+        console.log(error);
+
+        return res.status(500).json({
+            message: "Internal server error"
+        });
+
+    }
+
+});
+
 app.post("/api/v1/venues", async (req, res) => {
 
     try {
@@ -355,6 +385,9 @@ async (req,res)=>{
         "Cancelled";
 
         await booking.save();
+        await gameModel.deleteOne({
+    bookingId: booking._id
+});
 
         return res.status(200).json({
             message:"Booking cancelled"
@@ -380,7 +413,8 @@ app.get("/api/v1/bookings", auth, async (req,res)=>{
 
         const bookings = await bookingModel
         .find({
-            userId:req.userId
+            userId:req.userId,
+            status:"Booked"
         })
         .populate("venueId");
 
@@ -489,30 +523,35 @@ app.post("/api/v1/games", auth, async (req,res)=>{
 
 
 
-app.get("/api/v1/games", async (req,res)=>{
+app.get("/api/v1/games", async (req, res) => {
 
-    try{
+    try {
 
         const games = await gameModel
-        .find({ status:"Open" })
-        .populate("organizerId","name")
-        .populate("bookingId");
+            .find({ status: "Open" })
+            .populate("organizerId", "name")
+            .populate({
+                path: "bookingId",
+                populate: {
+                    path: "venueId"
+                }
+            });
 
         return res.status(200).json({
             games
         });
 
     }
-    
-    catch(error){
 
-    console.log(error);
+    catch (error) {
 
-    return res.status(500).json({
-        error:error.message
-    });
+        console.log(error);
 
-}
+        return res.status(500).json({
+            error: error.message
+        });
+
+    }
 
 });
 
@@ -669,7 +708,8 @@ app.get("/api/v1/my-bookings", auth, async (req, res) => {
 
         const bookings = await bookingModel
             .find({
-                userId: req.userId
+                userId: req.userId,
+                status: "Booked"
             })
             .populate("venueId");
 

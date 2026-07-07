@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
@@ -7,6 +7,8 @@ function Booking() {
 
     const { venueId } = useParams();
     const navigate = useNavigate();
+
+    const [venue, setVenue] = useState(null);
 
     const [date, setDate] = useState("");
     const [slots, setSlots] = useState([]);
@@ -18,6 +20,30 @@ function Booking() {
     const maxDate = new Date();
     maxDate.setDate(maxDate.getDate() + 10);
     const maxBookingDate = maxDate.toISOString().split("T")[0];
+
+    useEffect(() => {
+
+        fetchVenue();
+
+    }, []);
+
+    async function fetchVenue() {
+
+        try {
+
+            const response = await api.get(`/venues/${venueId}`);
+
+            setVenue(response.data.venue);
+
+        }
+
+        catch (error) {
+
+            console.log(error);
+
+        }
+
+    }
 
     async function fetchAvailableSlots(selectedDate) {
 
@@ -68,7 +94,9 @@ function Booking() {
 
             navigate("/profile");
 
-        } catch (error) {
+        }
+
+        catch (error) {
 
             console.log(error);
 
@@ -90,32 +118,47 @@ function Booking() {
             <div className="max-w-4xl mx-auto px-8 py-12">
 
                 <h1 className="text-4xl font-bold">
+
                     Book Venue
+
                 </h1>
 
-                <p className="text-gray-400 mt-2">
-                    Venue ID: {venueId}
+                <p className="text-gray-400 mt-2 text-xl">
+
+                    {venue ? venue.name : "Loading Venue..."}
+
                 </p>
 
                 <div className="mt-10">
 
                     <label className="block mb-3 text-lg">
+
                         Select Date
+
                     </label>
 
                     <input
+
                         type="date"
+
                         value={date}
+
                         min={today}
+
                         max={maxBookingDate}
+
                         onChange={(e) => {
 
                             setDate(e.target.value);
+
                             setDateSelected(true);
+
                             fetchAvailableSlots(e.target.value);
 
                         }}
+
                         className="bg-slate-900 border border-slate-700 rounded-lg p-3"
+
                     />
 
                 </div>
@@ -123,7 +166,9 @@ function Booking() {
                 <div className="mt-12">
 
                     <h2 className="text-2xl font-semibold mb-6">
+
                         Available Slots
+
                     </h2>
 
                     {
@@ -131,13 +176,17 @@ function Booking() {
                         !dateSelected ? (
 
                             <p className="text-gray-400">
+
                                 Select a date to view available slots.
+
                             </p>
 
                         ) : slots.length === 0 ? (
 
                             <p className="text-red-400 font-semibold">
+
                                 No slots available for this date.
+
                             </p>
 
                         ) : (

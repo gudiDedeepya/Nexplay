@@ -1,6 +1,16 @@
 import { Link } from "react-router-dom";
+import {useNavigate} from "react-router-dom";
 
 function Navbar() {
+    const navigate = useNavigate();
+    function handleLogout() {
+
+        localStorage.removeItem("token");
+
+        navigate("/");
+
+    }
+
 
     return (
 
@@ -34,7 +44,8 @@ function Navbar() {
 
                 </div>
 
-                <button
+                <button 
+                onClick={handleLogout}
                 className="bg-blue-600 px-5 py-2 rounded-lg">
 
                     Logout

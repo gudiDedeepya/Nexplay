@@ -179,6 +179,7 @@ function Profile() {
                                             booking={booking}
 
                                             onCreateGame={handleCreateGame}
+                                            refreshBookings={fetchBookings}
 
                                         />
 
@@ -321,5 +322,6 @@ function Profile() {
     );
 
 }
+//a7ZfCSeymu4dQkpz
 
 export default Profile;

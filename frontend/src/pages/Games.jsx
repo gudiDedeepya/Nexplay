@@ -22,7 +22,9 @@ function Games() {
 
             setGames(response.data.games);
 
-        } catch (error) {
+        }
+
+        catch (error) {
 
             console.log(error);
 
@@ -38,49 +40,80 @@ function Games() {
 
             <div className="max-w-7xl mx-auto px-8 py-14">
 
-                <div className="flex justify-between items-center">
+                <div className="mb-10">
 
-                    <div>
+                    <h1 className="text-4xl font-bold text-white">
 
-                        <h1 className="text-4xl font-bold text-white">
+                        Community Games
 
-                            Community Games
+                    </h1>
 
-                        </h1>
+                    <p className="text-gray-400 mt-3">
 
-                        <p className="text-gray-400 mt-3">
+                        Discover games created by players and join the action.
 
-                            Join exciting games near you.
-
-                        </p>
-
-                    </div>
-
-                    <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl"
-                    >
-                        + Create Game
-                    </button>
+                    </p>
 
                 </div>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+                {
 
-                    {games.map((game) => (
+                    games.length === 0 ?
 
-                        <GameCard
+                    (
 
-                            key={game._id}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl py-20 text-center">
 
-                            game={game}
+                            <h2 className="text-3xl font-bold text-white">
 
-                            refreshGames={fetchGames}
+                                No Community Games
 
-                        />
+                            </h2>
 
-                    ))}
+                            <p className="text-gray-400 mt-4">
 
-                </div>
+                                No games are available right now.
+                            </p>
+
+                            <p className="text-gray-500 mt-2">
+
+                                Book a venue from your profile and create the first game!
+
+                            </p>
+
+                        </div>
+
+                    )
+
+                    :
+
+                    (
+
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+                            {
+
+                                games.map((game) => (
+
+                                    <GameCard
+
+                                        key={game._id}
+
+                                        game={game}
+
+                                        refreshGames={fetchGames}
+
+                                    />
+
+                                ))
+
+                            }
+
+                        </div>
+
+                    )
+
+                }
 
             </div>
 
