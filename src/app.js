@@ -15,7 +15,7 @@ const SLOTS = [
 const app=express();
 
 app.use(cors({
-    origin: "https://nexplay-jtot.vercel.app/"
+    origin: "https://nexplay-jtot.vercel.app"
 })); //cors is a middleware that allows cross-origin requests. It enables the server to accept requests from different origins (domains) and is commonly used in web applications to allow communication between the frontend and backend hosted on different domains or ports.
 app.use(express.json()); //it is a built-in middleware in Express that parses incoming requests with JSON payloads. It allows the server to automatically parse the JSON data sent in the request body and makes it accessible through req.body in route handlers. This is useful for handling API requests that send data in JSON format.
 
