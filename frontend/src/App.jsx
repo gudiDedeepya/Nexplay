@@ -12,10 +12,8 @@ import Booking from "./pages/Booking";
 
 function App() {
   return (
-    <BrowserRouter>//BrowserRouter is a component that enables routing in a React application. It uses the HTML5 history API to keep the UI in sync with the URL. It allows you to define different routes and render different components based on the current URL.
-      <Routes> //Routes is a component that is used to define a set of routes in a React application. It is used to group together multiple Route components and render the appropriate component based on the current URL.
-
-        <Route path="/" element={<Login />} /> 
+    <BrowserRouter>  
+      <Routes> 
 
         <Route path="/signup" element={<Signup />} />
 
