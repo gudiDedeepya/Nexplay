@@ -12,7 +12,7 @@ function Venues() {
 
     const [venues, setVenues] = useState([]);
 
-    const [searchParams] = useSearchParams();
+    const [searchParams] = useSearchParams();//reads the query params from the url 
 
     const navigate = useNavigate();
 

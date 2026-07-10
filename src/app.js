@@ -14,11 +14,12 @@ const SLOTS = [
 
 const app=express();
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+    origin: "https://nexplay-1rq7-alpha.vercel.app/"
+})); //cors is a middleware that allows cross-origin requests. It enables the server to accept requests from different origins (domains) and is commonly used in web applications to allow communication between the frontend and backend hosted on different domains or ports.
+app.use(express.json()); //it is a built-in middleware in Express that parses incoming requests with JSON payloads. It allows the server to automatically parse the JSON data sent in the request body and makes it accessible through req.body in route handlers. This is useful for handling API requests that send data in JSON format.
 
 
-app.use(express.json());
 app.post("/api/v1/signup",async (req,res)=>{
     try{
         const name=req.body.name;
@@ -34,6 +35,7 @@ app.post("/api/v1/signup",async (req,res)=>{
                 message:"user already exists"
             })
         }
+        //10 is like cost factor more secure higher number
             const hashedPassword = await bcrypt.hash(password, 10);
 
         await userModel.create({
@@ -101,9 +103,6 @@ app.post("/api/v1/signin", async (req, res) => {
         });
 
     }
-});
-app.get("/api/v1/me",auth,(req,res)=>{
-
 });
 
 app.get("/api/v1/venues/:venueId", async (req, res) => {
@@ -194,6 +193,8 @@ app.get("/api/v1/venues", async (req, res) => {
     }
 
 });
+
+
 app.post("/api/v1/bookings", auth, async (req,res)=>{
 
     try{
@@ -221,9 +222,9 @@ app.post("/api/v1/bookings", auth, async (req,res)=>{
         const selectedDate = new Date(bookingDate);
 
         const today = new Date();
-        today.setHours(0,0,0,0);
+        today.setHours(0,0,0,0);//sets the time of the date object to midnight (00:00:00) to compare only the date part without considering the time.
 
-        const startOfDay = new Date(selectedDate);
+        const startOfDay = new Date(selectedDate);//
         startOfDay.setHours(0,0,0,0);
 
         const endOfDay = new Date(selectedDate);
@@ -798,13 +799,6 @@ app.get("/api/v1/joined-games", auth, async (req, res) => {
 
 
 
-app.get("/api/squads",auth,(req,res)=>{
-
-});
-
-app.post("/api/squads",(req,res)=>{
-
-});
 
 
 
