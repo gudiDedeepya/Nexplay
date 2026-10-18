@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+﻿import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext.jsx";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -12,60 +13,61 @@ import Booking from "./pages/Booking";
 
 function App() {
   return (
-    <BrowserRouter>  
-      <Routes> 
-        <Route path="/" element={<Login />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
 
-        <Route path="/signup" element={<Signup />} />
+          <Route
+            path="/home"
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/home"
-          element={
-            <ProtectedRoute> //checks authenticated or not 
-              <Home />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/venues"
+            element={
+              <ProtectedRoute>
+                <Venues />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/venues"
-          element={
-            <ProtectedRoute>
-              <Venues />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/games"
+            element={
+              <ProtectedRoute>
+                <Games />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/games"
-          element={
-            <ProtectedRoute>
-              <Games />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-    path="/book/:venueId"
-    element={
-        <ProtectedRoute>
-            <Booking />
-        </ProtectedRoute>
-    }
-/>
+          <Route
+            path="/book/:venueId"
+            element={
+              <ProtectedRoute>
+                <Booking />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route path="*" element={<NotFound />} />
-
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

@@ -1,59 +1,87 @@
 function GameCardProfile({ game }) {
+    const booking = game.bookingId;
+    const venue = booking?.venueId;
+    const statusStyles = {
+        Open: "border-emerald-800 bg-emerald-950/60 text-emerald-300",
+        Full: "border-amber-800 bg-amber-950/60 text-amber-300",
+        Cancelled: "border-red-800 bg-red-950/60 text-red-300"
+    };
 
     return (
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500 transition">
-
-            <h2 className="text-2xl font-bold text-white">
-
-                {game.title}
-
-            </h2>
-
-            <p className="text-blue-400 mt-2">
-
-                🏏 {game.sport}
-
-            </p>
-
-            <p className="text-gray-400 mt-2">
-
-                🏟️ {game.bookingId.venueId.name}
-
-            </p>
-
-            <p className="text-gray-400 mt-2">
-
-                📍 {game.bookingId.venueId.location}
-
-            </p>
-
-            <p className="text-gray-400 mt-2">
-
-                👥 {game.joinedPlayers.length} / {game.maxPlayers}
-
-            </p>
-
-            <p className="text-gray-400 mt-2">
-
-                🎯 {game.skillLevel}
-
-            </p>
-
-            <p className="mt-3">
-
-                <span className="text-green-400">
-
-                    {game.status}
-
+        <article className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 transition hover:border-blue-700/70 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-300">
+                        {game.sport || "Community game"}
+                    </p>
+                    <h3 className="mt-2 text-xl font-bold text-white">{game.title}</h3>
+                </div>
+                <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[game.status] || statusStyles.Open}`}>
+                    {game.status || "Open"}
                 </span>
+            </div>
 
-            </p>
+            <div className="mt-5 space-y-3 text-sm text-slate-300">
+                <p className="flex gap-3">
+                    <span aria-hidden="true">🏟️</span>
+                    <span>{venue?.name || "Venue details unavailable"}</span>
+                </p>
+                {venue?.location && (
+                    <p className="flex gap-3">
+                        <span aria-hidden="true">📍</span>
+                        <span>{venue.location}</span>
+                    </p>
+                )}
+                {booking?.bookingDate && (
+                    <p className="flex gap-3">
+                        <span aria-hidden="true">📅</span>
+                        <span>{new Date(booking.bookingDate).toLocaleDateString(undefined, {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric"
+                        })}</span>
+                    </p>
+                )}
+                {booking?.slot && (
+                    <p className="flex gap-3">
+                        <span aria-hidden="true">🕒</span>
+                        <span>{booking.slot}</span>
+                    </p>
+                )}
+            </div>
 
-        </div>
-
+            <div className="mt-auto pt-6">
+                <div className="mb-3 flex items-center justify-between text-sm">
+                    <span className="text-slate-400">Players</span>
+                    <span className="font-semibold text-white">
+                        {game.joinedPlayers?.length || 0} / {game.maxPlayers}
+                    </span>
+                </div>
+                <div
+                    role="progressbar"
+                    aria-label="Game player capacity"
+                    aria-valuemin={0}
+                    aria-valuemax={game.maxPlayers}
+                    aria-valuenow={Math.min(game.joinedPlayers?.length || 0, game.maxPlayers || 0)}
+                    className="h-2 overflow-hidden rounded-full bg-slate-800"
+                >
+                    <div
+                        className="h-full rounded-full bg-blue-500 transition-all"
+                        style={{
+                            width: `${game.maxPlayers > 0
+                                ? Math.min(((game.joinedPlayers?.length || 0) / game.maxPlayers) * 100, 100)
+                                : 0}%`
+                        }}
+                    />
+                </div>
+                <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                    <span>{game.skillLevel || "Beginner"} level</span>
+                    <span>{game.joinedPlayers?.length || 0} players</span>
+                </div>
+            </div>
+        </article>
     );
-
 }
 
 export default GameCardProfile;

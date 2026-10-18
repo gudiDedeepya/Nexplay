@@ -1,105 +1,84 @@
-# NexPlay Backend
+﻿# NexPlay
 
-A sports venue booking and game matchmaking platform built using Node.js, Express.js, MongoDB, and JWT Authentication.
+NexPlay is a sports venue booking and community game platform built with Node.js, Express, MongoDB, Mongoose, React, and Vite.
 
 ## Features
 
-### Authentication
+- User signup and signin
+- JWT-based protected routes
+- Venue listing and sport filtering
+- Venue booking for valid date and slot combinations
+- Booking cancellation
+- Community game creation from bookings
+- Game join/leave flows
+- User profile dashboard with bookings and games
 
-* User Signup
-* User Signin
-* JWT Authentication
-* Protected Routes
+## Project structure
 
-### Venues
+- `server.js` – starts the backend server
+- `src/app.js` – Express app setup and route mounting
+- `src/config/db.js` – MongoDB connection setup
+- `src/middlewares` – auth and error middleware
+- `src/models` – Mongoose schemas
+- `src/routes` – auth, venue, booking, and game route modules
+- `frontend/` – Vite React frontend app
 
-* Create Venue
-* View All Venues
-* Filter Venues by Sport
+## Environment variables
 
-### Booking System
+Copy `.env.example` to `.env` and update values before running the backend.
 
-* Book Sports Venues
-* View Available Slots
-* Prevent Double Booking
-* View My Bookings
-* Cancel Bookings
-* Booking allowed only for the next 10 days
+Example:
 
-### Games
-
-* Create Game
-* View Available Games
-* Join Game
-* Leave Game
-* Automatic Player Count Management
-
-## Tech Stack
-
-* Node.js
-* Express.js
-* MongoDB
-* Mongoose
-* JWT
-* bcryptjs
-
-## API Endpoints
-
-### Authentication
-
-```http
-POST /api/v1/signup
-POST /api/v1/signin
-GET /api/v1/me
+```env
+PORT=5000
+MONGO_URI=mongodb://127.0.0.1:27017/NEXPLAY
+JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
+FRONTEND_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+NODE_ENV=development
 ```
 
-### Venues
+Frontend configuration:
 
-```http
-POST /api/v1/venues
-GET /api/v1/venues
-GET /api/v1/venues?sport=Cricket
-GET /api/v1/venues/:venueId/slots
+```env
+VITE_API_URL=http://localhost:5000/api/v1
 ```
 
-### Bookings
+## Run locally
 
-```http
-POST /api/v1/bookings
-GET /api/v1/bookings
-DELETE /api/v1/bookings/:bookingId
-```
-
-### Games
-
-```http
-POST /api/v1/games
-GET /api/v1/games
-POST /api/v1/games/:gameId/join
-DELETE /api/v1/games/:gameId/leave
-```
-
-## Installation
+Backend:
 
 ```bash
-git clone <repository-url>
-cd nexplay
-
 npm install
-
 npm run dev
+```
 
-## Future Enhancements
+Frontend:
 
-* Squad Management
-* Team Creation
-* Notifications
-* Chat System
-* Payments
-* Ratings and Reviews
-* Tournament Management
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Author
+## Admin access
 
-Gudi Dedeepya
-B.Tech CSE, NIT Durgapur
+Create a normal account first, then promote it using the backend environment's MongoDB connection:
+
+```bash
+npm run admin:promote -- admin@example.com
+```
+
+Only accounts with the database `admin` role can create venues through the API. The role cannot be set through signup.
+
+## Backend tests
+
+Run `npm test` with a local MongoDB server available. The integration tests create a uniquely named temporary database, verify auth/admin/booking/game flows, and drop that test database afterward. They do not use the application's `NEXPLAY` database.
+
+In production, set `JWT_SECRET` to a random value of at least 32 characters, plus explicit `MONGO_URI` and `FRONTEND_ORIGIN` values. The server will refuse to start if any are missing.
+
+The backend creates unique database indexes to prevent duplicate active venue bookings and duplicate games for one booking. If older database records already violate either rule, startup fails and the duplicates must be reviewed and resolved before the indexes can be created.
+
+## Notes
+
+- Authentication currently uses localStorage for the token, per the project requirement.
+- This project is designed as an MVP and is ready for feature expansion and production hardening.

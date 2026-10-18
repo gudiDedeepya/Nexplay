@@ -23,36 +23,23 @@ function Venues() {
     );
 
     useEffect(() => {
+        async function loadVenues() {
+            try {
+                let url = "/venues";
 
-        fetchVenues();
+                if (sport) {
+                    url += `?sport=${encodeURIComponent(sport)}`;
+                }
 
-    }, [sport]);
-
-    async function fetchVenues() {
-
-        try {
-
-            let url = "/venues";
-
-            if (sport) {
-
-                url += `?sport=${sport}`;
-
+                const response = await api.get(url);
+                setVenues(response.data.venues);
+            } catch (error) {
+                console.log(error);
             }
-
-            const response = await api.get(url);
-
-            setVenues(response.data.venues);
-
         }
 
-        catch (error) {
-
-            console.log(error);
-
-        }
-
-    }
+        loadVenues();
+    }, [sport]);
 
     function handleSearch() {
 

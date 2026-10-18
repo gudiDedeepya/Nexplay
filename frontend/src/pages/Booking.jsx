@@ -22,28 +22,17 @@ function Booking() {
     const maxBookingDate = maxDate.toISOString().split("T")[0];
 
     useEffect(() => {
-
-        fetchVenue();
-
-    }, []);
-
-    async function fetchVenue() {
-
-        try {
-
-            const response = await api.get(`/venues/${venueId}`);
-
-            setVenue(response.data.venue);
-
+        async function loadVenue() {
+            try {
+                const response = await api.get(`/venues/${venueId}`);
+                setVenue(response.data.venue);
+            } catch (error) {
+                console.log(error);
+            }
         }
 
-        catch (error) {
-
-            console.log(error);
-
-        }
-
-    }
+        loadVenue();
+    }, [venueId]);
 
     async function fetchAvailableSlots(selectedDate) {
 
