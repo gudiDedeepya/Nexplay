@@ -3,9 +3,7 @@ mongoose.connect("mongodb+srv://gudidedeepya_db_user:a7ZfCSeymu4dQkpz@cluster0.d
 .then(() => {
     console.log("MongoDB Connected");
 })
-.catch((err) => {
-    console.log("not connected");
-});
+ .catch((err) => console.error("MongoDB connection failed:", err));
 
 
 
