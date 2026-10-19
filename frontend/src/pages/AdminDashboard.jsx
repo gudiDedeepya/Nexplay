@@ -11,8 +11,15 @@ const emptyVenue = {
   pricePerHour: "",
   description: "",
   image: "",
+  images: "",
+  facilities: "",
+  amenities: "",
   operatingHours: { open: "16:00", close: "21:00" }
 };
+
+function splitLines(value) {
+  return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+}
 
 const tabs = ["Overview", "Venues", "Bookings", "Games"];
 
@@ -114,6 +121,9 @@ function AdminDashboard() {
       pricePerHour: venue.pricePerHour ?? "",
       description: venue.description || "",
       image: venue.image || "",
+      images: (venue.images || []).join("\n"),
+      facilities: (venue.facilities || []).join("\n"),
+      amenities: (venue.amenities || []).join("\n"),
       operatingHours: {
         open: venue.operatingHours?.open || "16:00",
         close: venue.operatingHours?.close || "21:00"
@@ -139,6 +149,9 @@ function AdminDashboard() {
       const payload = {
         ...form,
         pricePerHour: Number(form.pricePerHour),
+        images: splitLines(form.images),
+        facilities: splitLines(form.facilities),
+        amenities: splitLines(form.amenities),
         operatingHours: form.operatingHours
       };
       if (editingVenueId) {
@@ -567,6 +580,37 @@ function AdminDashboard() {
                     className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   />
                 </label>
+
+                <label className="block text-sm font-medium text-slate-300">
+                  Additional photo URLs <span className="font-normal text-slate-500">— optional, one per line</span>
+                  <textarea
+                    name="images"
+                    value={form.images}
+                    onChange={updateForm}
+                    rows="3"
+                    placeholder={"https://example.com/court-1.jpg\nhttps://example.com/court-2.jpg"}
+                    className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </label>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    ["facilities", "Facilities", "e.g. Indoor court, parking"],
+                    ["amenities", "Amenities", "e.g. Changing rooms, drinking water"]
+                  ].map(([name, label, placeholder]) => (
+                    <label key={name} className="block text-sm font-medium text-slate-300">
+                      {label} <span className="font-normal text-slate-500">— optional, one per line</span>
+                      <textarea
+                        name={name}
+                        value={form[name]}
+                        onChange={updateForm}
+                        rows="3"
+                        placeholder={placeholder}
+                        className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </label>
+                  ))}
+                </div>
 
                 {error && (
                   <p role="alert" className="rounded-xl border border-red-800/80 bg-red-950/40 px-4 py-3 text-sm text-red-200">

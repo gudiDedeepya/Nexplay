@@ -1,58 +1,48 @@
 import { useEffect, useState } from "react";
-import {
-    useSearchParams,
-    useNavigate
-} from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import VenueCard from "../components/VenueCard";
+import { filterVenuesByPrice } from "../utils/filterVenues";
+
+function filtersFromParams(params) {
+    return {
+        search: params.get("search") || "",
+        sport: params.get("sport") || "",
+        minPrice: params.get("minPrice") || "",
+        maxPrice: params.get("maxPrice") || ""
+    };
+}
 
 function Venues() {
-
     const [venues, setVenues] = useState([]);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const paramsKey = searchParams.toString();
     const [requestState, setRequestState] = useState({
         key: null,
         status: "loading",
         error: ""
     });
+    const [filterError, setFilterError] = useState("");
     const [retryCount, setRetryCount] = useState(0);
-
-    const [searchParams] = useSearchParams();//reads the query params from the url 
-
-    const navigate = useNavigate();
-
-    const sport = searchParams.get("sport");
-    const requestKey = `${sport || ""}:${retryCount}`;
-
-    const [sportSelection, setSportSelection] = useState({
-        routeSport: sport,
-        value: sport || ""
-    });
-    const selectedSport = sportSelection.routeSport === sport
-        ? sportSelection.value
-        : sport || "";
 
     useEffect(() => {
         let active = true;
 
         async function loadVenues() {
             try {
-                let url = "/venues";
-
-                if (sport) {
-                    url += `?sport=${encodeURIComponent(sport)}`;
-                }
-
-                const response = await api.get(url);
+                const response = await api.get("/venues", {
+                    params: filtersFromParams(new URLSearchParams(paramsKey))
+                });
                 if (active) {
                     setVenues(response.data.venues);
-                    setRequestState({ key: requestKey, status: "loaded", error: "" });
+                    setRequestState({ key: paramsKey, status: "loaded", error: "" });
                 }
             } catch (error) {
                 if (active) {
                     setRequestState({
-                        key: requestKey,
+                        key: paramsKey,
                         status: "error",
                         error: error.response?.data?.message ||
                             "Unable to load venues. Check your connection and try again."
@@ -62,152 +52,166 @@ function Venues() {
         }
 
         loadVenues();
-
         return () => {
             active = false;
         };
-    }, [sport, requestKey]);
+    }, [paramsKey, retryCount]);
 
-    const loading = requestState.key !== requestKey || requestState.status === "loading";
-    const error = requestState.key === requestKey ? requestState.error : "";
+    function applyFilters(event) {
+        event.preventDefault();
+        const params = new URLSearchParams();
+        const values = new FormData(event.currentTarget);
+        const minPriceText = String(values.get("minPrice") || "").trim();
+        const maxPriceText = String(values.get("maxPrice") || "").trim();
+        const minPrice = minPriceText === "" ? null : Number(minPriceText);
+        const maxPrice = maxPriceText === "" ? null : Number(maxPriceText);
 
-    function handleSearch() {
-
-        if (selectedSport === "") {
-
-            navigate("/venues");
-
+        if (
+            (minPrice !== null && (!Number.isFinite(minPrice) || minPrice < 0)) ||
+            (maxPrice !== null && (!Number.isFinite(maxPrice) || maxPrice < 0))
+        ) {
+            setFilterError("Prices must be valid non-negative numbers.");
+            return;
         }
-
-        else {
-
-            navigate(`/venues?sport=${encodeURIComponent(selectedSport)}`);
-
+        if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+            setFilterError("Minimum price cannot be greater than maximum price.");
+            return;
         }
-
+        setFilterError("");
+        for (const [key, value] of values.entries()) {
+            const text = String(value).trim();
+            if (text) params.set(key, text);
+        }
+        setSearchParams(params);
     }
 
-    return (
+    function clearFilters() {
+        setFilterError("");
+        setSearchParams({});
+    }
 
-        <div className="min-h-screen bg-slate-950">
-
-            <Navbar />
-
-            <div className="max-w-7xl mx-auto px-8 py-14">
-
-                <h1 className="text-4xl font-bold text-white">
-
-                    Available Venues
-
-                </h1>
-
-                <p className="text-gray-400 mt-3">
-
-                    {sport
-                        ? `Showing ${sport} venues`
-                        : "Browse all available sports venues"}
-
-                </p>
-
-                {/* Search Section */}
-
-                <div className="flex flex-wrap items-center gap-4 mt-8">
-
-                    <select
-
-                        value={selectedSport}
-
-                        onChange={(e) =>
-                            setSportSelection({
-                                routeSport: sport,
-                                value: e.target.value
-                            })
-                        }
-
-                        className="bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl"
-
-                    >
-
-                        <option value="">All Sports</option>
-                        <option value="Cricket">Cricket</option>
-                        <option value="Football">Football</option>
-                        <option value="Badminton">Badminton</option>
-                        <option value="Basketball">Basketball</option>
-                        <option value="Kabaddi">Kabaddi</option>
-
-                    </select>
-
-                    <button
-
-                        onClick={handleSearch}
-
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl"
-
-                    >
-
-                        Search
-
-                    </button>
-
-                </div>
-
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
-
-                    {
-
-                        loading ? (
-
-                            <div role="status" className="col-span-full text-center text-gray-400 text-xl">
-                                Loading venues...
-                            </div>
-
-                        ) : error ? (
-
-                            <div className="col-span-full text-center">
-                                <p role="alert" className="text-red-400 text-lg">{error}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => setRetryCount((count) => count + 1)}
-                                    className="mt-4 rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
-                                >
-                                    Try again
-                                </button>
-                            </div>
-
-                        ) : venues.length > 0 ? (
-
-                            venues.map((venue) => (
-
-                                <VenueCard
-
-                                    key={venue._id}
-
-                                    venue={venue}
-
-                                />
-
-                            ))
-
-                        ) : (
-
-                            <div className="col-span-full text-center text-gray-400 text-xl">
-
-                                No venues found.
-
-                            </div>
-
-                        )
-
-                    }
-
-                </div>
-
-            </div>
-
-        </div>
-
+    const loading = requestState.key !== paramsKey || requestState.status === "loading";
+    const filters = filtersFromParams(searchParams);
+    const filteredVenues = filterVenuesByPrice(
+        venues,
+        filters.minPrice,
+        filters.maxPrice,
+        filters.search
     );
 
+    return (
+        <div className="min-h-screen bg-slate-950">
+            <Navbar />
+            <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+                <h1 className="text-4xl font-bold text-white">Available Venues</h1>
+                <p className="mt-3 text-gray-400">
+                    Search by venue name or location, or filter by sport and price.
+                </p>
+
+                <form
+                    key={paramsKey}
+                    onSubmit={applyFilters}
+                    className="mt-8 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                    <label className="text-sm font-medium text-slate-300">
+                        Search name or location
+                        <input
+                            name="search"
+                            defaultValue={filters.search}
+                            placeholder="e.g. Riverside or Tirupati"
+                            className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-blue-500"
+                        />
+                    </label>
+                    <label className="text-sm font-medium text-slate-300">
+                        Sport
+                        <select
+                            name="sport"
+                            defaultValue={filters.sport}
+                            className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-blue-500"
+                        >
+                            <option value="">All sports</option>
+                            {["Cricket", "Football", "Badminton", "Basketball", "Kabaddi", "Tennis", "Volleyball"].map((sport) => (
+                                <option key={sport} value={sport}>{sport}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="text-sm font-medium text-slate-300">
+                            Minimum price / hour
+                            <input
+                                name="minPrice"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                defaultValue={filters.minPrice}
+                                placeholder="Any"
+                                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-white outline-none focus:border-blue-500"
+                            />
+                        </label>
+                        <label className="text-sm font-medium text-slate-300">
+                            Maximum price / hour
+                            <input
+                                name="maxPrice"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                defaultValue={filters.maxPrice}
+                                placeholder="Any"
+                                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-white outline-none focus:border-blue-500"
+                            />
+                        </label>
+                    </div>
+                    <div className="flex items-end gap-3">
+                        <button
+                            type="submit"
+                            className="flex-1 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-500"
+                        >
+                            Apply filters
+                        </button>
+                        <button
+                            type="button"
+                            onClick={clearFilters}
+                            className="rounded-xl border border-slate-700 px-4 py-3 font-semibold text-slate-300 transition hover:bg-slate-800"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </form>
+
+                {filterError && (
+                    <p role="alert" className="mt-4 text-sm text-red-300">{filterError}</p>
+                )}
+
+                <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {loading ? (
+                        <div role="status" className="col-span-full py-12 text-center text-xl text-gray-400">
+                            Loading venues...
+                        </div>
+                    ) : requestState.status === "error" ? (
+                        <div className="col-span-full py-12 text-center">
+                            <p role="alert" className="text-lg text-red-400">{requestState.error}</p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setRequestState({ key: paramsKey, status: "loading", error: "" });
+                                    setRetryCount((count) => count + 1);
+                                }}
+                                className="mt-4 rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+                            >
+                                Try again
+                            </button>
+                        </div>
+                    ) : filteredVenues.length ? (
+                        filteredVenues.map((venue) => <VenueCard key={venue._id} venue={venue} />)
+                    ) : (
+                        <div className="col-span-full py-12 text-center text-xl text-gray-400">
+                            No venues match those filters.
+                        </div>
+                    )}
+                </div>
+            </main>
+        </div>
+    );
 }
 
 export default Venues;

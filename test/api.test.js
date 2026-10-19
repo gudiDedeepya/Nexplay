@@ -11,7 +11,8 @@ import {
   chatMessageModel,
   gameModel,
   userModel,
-  venueModel
+  venueModel,
+  venueReviewModel
 } from "../src/models/userschema.js";
 import { validateRuntimeConfig } from "../src/config/security.js";
 import { attachChatServer } from "../src/realtime/chatServer.js";
@@ -71,7 +72,8 @@ before(async () => {
     venueModel.syncIndexes(),
     bookingModel.syncIndexes(),
     gameModel.syncIndexes(),
-    chatMessageModel.syncIndexes()
+    chatMessageModel.syncIndexes(),
+    venueReviewModel.syncIndexes()
   ]);
 
   const { default: app, allowedOrigins } = await import("../src/app.js");
@@ -182,6 +184,9 @@ test("admin dashboard and venue management require admin access and honor venue 
       sport: "Tennis",
       location: "Test city",
       pricePerHour: 400,
+      images: ["https://example.test/court.jpg"],
+      facilities: ["Indoor court"],
+      amenities: ["Changing rooms"],
       operatingHours: { open: "18:00", close: "20:00" }
     }
   });
@@ -201,6 +206,9 @@ test("admin dashboard and venue management require admin access and honor venue 
   });
   assert.equal(updatedVenue.status, 200);
   assert.equal(updatedVenue.body.venue.pricePerHour, 450);
+  assert.deepEqual(updatedVenue.body.venue.images, ["https://example.test/court.jpg"]);
+  assert.deepEqual(updatedVenue.body.venue.facilities, ["Indoor court"]);
+  assert.deepEqual(updatedVenue.body.venue.amenities, ["Changing rooms"]);
 
   const bookingDate = new Date();
   bookingDate.setDate(bookingDate.getDate() + 2);
@@ -242,6 +250,124 @@ test("admin dashboard and venue management require admin access and honor venue 
   const publicVenues = await request("/venues");
   assert.equal(publicVenues.body.venues.some((venue) => venue._id === venueId), false);
   assert.equal(await bookingModel.countDocuments({ venueId }), 1);
+});
+
+test("venue discovery filters by text, price, and available date and slot", async () => {
+  const player = await createUser(`discovery-${randomUUID()}@example.test`);
+  const venue = await venueModel.create({
+    name: "Riverside Sports Court",
+    sport: "Tennis",
+    location: "Tirupati",
+    pricePerHour: 500,
+    operatingHours: { open: "16:00", close: "20:00" }
+  });
+  const otherVenue = await venueModel.create({
+    name: "Hilltop Court",
+    sport: "Tennis",
+    location: "Other city",
+    pricePerHour: 900,
+    operatingHours: { open: "16:00", close: "20:00" }
+  });
+  const bookingDate = new Date();
+  bookingDate.setDate(bookingDate.getDate() + 2);
+  const date = bookingDate.toISOString().slice(0, 10);
+  const day = new Date(`${date}T00:00:00.000Z`);
+  await bookingModel.create({
+    userId: player._id,
+    venueId: venue._id,
+    bookingDate: day,
+    slot: "17:00-18:00"
+  });
+
+  const search = await request("/venues?search=river&minPrice=400&maxPrice=600");
+  assert.equal(search.status, 200);
+  assert.deepEqual(search.body.venues.map((item) => item._id), [venue._id.toString()]);
+
+  const locationSearch = await request("/venues?search=tirupati");
+  assert.ok(locationSearch.body.venues.some((item) => item._id === venue._id.toString()));
+  assert.ok(!locationSearch.body.venues.some((item) => item._id === otherVenue._id.toString()));
+
+  const availableAtTime = await request(`/venues?date=${date}&slot=18%3A00-19%3A00`);
+  assert.ok(availableAtTime.body.venues.some((item) => item._id === venue._id.toString()));
+  const bookedAtTime = await request(`/venues?date=${date}&slot=17%3A00-18%3A00`);
+  assert.ok(!bookedAtTime.body.venues.some((item) => item._id === venue._id.toString()));
+
+  const invalidFilters = await request("/venues?minPrice=800&maxPrice=100");
+  assert.equal(invalidFilters.status, 400);
+  const invalidAvailability = await request("/venues?slot=16%3A00-17%3A00");
+  assert.equal(invalidAvailability.status, 400);
+});
+
+test("venue reviews require an owned completed booking and update venue ratings", async () => {
+  const player = await createUser(`reviewer-${randomUUID()}@example.test`);
+  const otherPlayer = await createUser(`other-reviewer-${randomUUID()}@example.test`);
+  const venue = await venueModel.create({
+    name: "Review Test Court",
+    sport: "Badminton",
+    location: "Review town",
+    pricePerHour: 300
+  });
+  const today = dateKeyInTimeZone(new Date());
+  const yesterday = new Date(`${today}T00:00:00.000Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const completedBooking = await bookingModel.create({
+    userId: player._id,
+    venueId: venue._id,
+    bookingDate: yesterday,
+    slot: "16:00-17:00"
+  });
+  const otherCompletedBooking = await bookingModel.create({
+    userId: otherPlayer._id,
+    venueId: venue._id,
+    bookingDate: yesterday,
+    slot: "17:00-18:00"
+  });
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + 2);
+  const futureBooking = await bookingModel.create({
+    userId: player._id,
+    venueId: venue._id,
+    bookingDate: new Date(`${futureDate.toISOString().slice(0, 10)}T00:00:00.000Z`),
+    slot: "18:00-19:00"
+  });
+
+  const futureAttempt = await request(`/venues/${venue._id}/reviews`, {
+    method: "POST",
+    token: tokenFor(player._id),
+    body: { bookingId: futureBooking._id, rating: 5, text: "Too early" }
+  });
+  assert.equal(futureAttempt.status, 403);
+
+  const unauthorizedAttempt = await request(`/venues/${venue._id}/reviews`, {
+    method: "POST",
+    token: tokenFor(player._id),
+    body: { bookingId: otherCompletedBooking._id, rating: 5 }
+  });
+  assert.equal(unauthorizedAttempt.status, 403);
+
+  const created = await request(`/venues/${venue._id}/reviews`, {
+    method: "POST",
+    token: tokenFor(player._id),
+    body: { bookingId: completedBooking._id, rating: 4, text: "Good court" }
+  });
+  assert.equal(created.status, 201);
+  const duplicate = await request(`/venues/${venue._id}/reviews`, {
+    method: "POST",
+    token: tokenFor(player._id),
+    body: { bookingId: completedBooking._id, rating: 3 }
+  });
+  assert.equal(duplicate.status, 409);
+
+  const reviewList = await request(`/venues/${venue._id}/reviews`, {
+    token: tokenFor(player._id)
+  });
+  assert.equal(reviewList.status, 200);
+  assert.equal(reviewList.body.reviews.length, 1);
+  assert.equal(reviewList.body.eligibleBookings.length, 0);
+
+  const listing = await request("/venues?search=Review%20Test");
+  assert.equal(listing.body.venues[0].averageRating, 4);
+  assert.equal(listing.body.venues[0].reviewCount, 1);
 });
 
 test("concurrent bookings cannot reserve the same venue slot twice", async () => {

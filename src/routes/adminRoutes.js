@@ -8,6 +8,7 @@ import {
   venueModel
 } from "../models/userschema.js";
 import { validateVenueData } from "../utils/validators.js";
+import { normalizeVenueData } from "../utils/venueData.js";
 
 const router = express.Router();
 router.use(auth, requireAdmin);
@@ -71,15 +72,8 @@ router.post("/venues", async (req, res, next) => {
       return res.status(400).json({ message: validationError });
     }
 
-    const { name, sport, location, pricePerHour, description, image, operatingHours } = req.body;
     const venue = await venueModel.create({
-      name: name.trim(),
-      sport: sport.trim(),
-      location: location.trim(),
-      pricePerHour: Number(pricePerHour),
-      description,
-      image,
-      operatingHours: operatingHours || { open: "16:00", close: "21:00" },
+      ...normalizeVenueData(req.body),
       active: true
     });
 
@@ -100,19 +94,22 @@ router.put("/venues/:venueId", async (req, res, next) => {
       return res.status(400).json({ message: validationError });
     }
 
-    const { name, sport, location, pricePerHour, description, image, operatingHours } = req.body;
+    const venueData = normalizeVenueData(req.body);
+    for (const optionalField of [
+      "image",
+      "images",
+      "facilities",
+      "amenities",
+      "description",
+      "operatingHours"
+    ]) {
+      if (!Object.hasOwn(req.body, optionalField)) delete venueData[optionalField];
+    }
+
     const venue = await venueModel.findByIdAndUpdate(
       req.params.venueId,
       {
-        $set: {
-          name: name.trim(),
-          sport: sport.trim(),
-          location: location.trim(),
-          pricePerHour: Number(pricePerHour),
-          description,
-          image,
-          operatingHours
-        }
+        $set: venueData
       },
       { returnDocument: "after", runValidators: true }
     );

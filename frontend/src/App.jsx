@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
 import Venues from "./pages/Venues";
+import VenueDetails from "./pages/VenueDetails";
 import Games from "./pages/Games";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
@@ -37,6 +38,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Venues />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/venues/:venueId"
+            element={
+              <ProtectedRoute>
+                <VenueDetails />
               </ProtectedRoute>
             }
           />
