@@ -3,6 +3,13 @@ import { auth, requireAdmin } from "../middlewares/authmiddleware.js";
 import { bookingModel, venueModel } from "../models/userschema.js";
 import { validateVenueData } from "../utils/validators.js";
 import { getVenueSlots } from "../utils/venueSlots.js";
+import {
+  BOOKING_TIME_ZONE,
+  dateKeyInTimeZone,
+  dateRangeForBooking,
+  minutesInTimeZone,
+  parseBookingDate
+} from "../utils/bookingDates.js";
 
 const router = express.Router();
 
@@ -62,9 +69,8 @@ router.get("/", async (req, res, next) => {
 router.get("/:venueId/slots", async (req, res, next) => {
   try {
     const venueId = req.params.venueId;
-    const selectedDate = new Date(req.query.date);
-
-    if (Number.isNaN(selectedDate.getTime())) {
+    const parsedDate = parseBookingDate(req.query.date);
+    if (!parsedDate) {
       return res.status(400).json({ message: "Invalid booking date" });
     }
 
@@ -73,25 +79,25 @@ router.get("/:venueId/slots", async (req, res, next) => {
       return res.status(404).json({ message: "Venue not found" });
     }
 
-    const startOfDay = new Date(selectedDate);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay } = dateRangeForBooking(parsedDate.dateKey);
 
     const bookings = await bookingModel.find({
       venueId,
       bookingDate: {
         $gte: startOfDay,
-        $lte: endOfDay
+        $lt: endOfDay
       },
       status: "Booked"
     });
 
     const bookedSlots = bookings.map((booking) => booking.slot);
-    const availableSlots = getVenueSlots(venue.operatingHours).filter(
-      (slot) => !bookedSlots.includes(slot)
-    );
+    const todayKey = dateKeyInTimeZone(new Date(), BOOKING_TIME_ZONE);
+    const currentMinutes = minutesInTimeZone(new Date(), BOOKING_TIME_ZONE);
+    const availableSlots = getVenueSlots(venue.operatingHours).filter((slot) => {
+      const startHour = Number(slot.slice(0, 2));
+      const hasNotPassed = parsedDate.dateKey !== todayKey || startHour * 60 > currentMinutes;
+      return hasNotPassed && !bookedSlots.includes(slot);
+    });
 
     return res.status(200).json({ availableSlots });
   } catch (error) {

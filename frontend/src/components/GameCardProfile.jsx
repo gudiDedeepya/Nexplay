@@ -1,6 +1,7 @@
 import { useState } from "react";
 import GameChatModal from "./GameChatModal";
 import { useGameChat } from "../hooks/useGameChat";
+import { formatBookingDate } from "../utils/bookingDates";
 
 function GameCardProfile({ game }) {
     const [chatOpen, setChatOpen] = useState(false);
@@ -42,12 +43,7 @@ function GameCardProfile({ game }) {
                 {booking?.bookingDate && (
                     <p className="flex gap-3">
                         <span aria-hidden="true">📅</span>
-                        <span>{new Date(booking.bookingDate).toLocaleDateString(undefined, {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric"
-                        })}</span>
+                        <span>{formatBookingDate(booking.bookingDate)}</span>
                     </p>
                 )}
                 {booking?.slot && (

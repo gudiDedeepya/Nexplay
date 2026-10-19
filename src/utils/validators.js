@@ -91,16 +91,24 @@ export function validateVenueData({
 }
 
 export function validateBookingData({ venueId, bookingDate, slot }) {
-  if (!venueId || typeof venueId !== "string") {
-    return "Venue ID is required.";
+  const dateMatch =
+    typeof bookingDate === "string" &&
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(bookingDate);
+  if (typeof venueId !== "string" || !/^[a-f\d]{24}$/i.test(venueId)) {
+    return "A valid venue ID is required.";
   }
 
-  if (!isNonEmptyString(bookingDate)) {
-    return "Booking date is required.";
+  if (!dateMatch) {
+    return "Booking date must use YYYY-MM-DD format.";
   }
 
-  const parsedDate = new Date(bookingDate);
-  if (Number.isNaN(parsedDate.getTime())) {
+  const [, year, month, day] = dateMatch;
+  const parsedDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (
+    parsedDate.getUTCFullYear() !== Number(year) ||
+    parsedDate.getUTCMonth() !== Number(month) - 1 ||
+    parsedDate.getUTCDate() !== Number(day)
+  ) {
     return "Booking date is invalid.";
   }
 

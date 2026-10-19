@@ -2,6 +2,7 @@ import api from "../services/api";
 import { useState } from "react";
 import GameChatModal from "./GameChatModal";
 import { useGameChat } from "../hooks/useGameChat";
+import { formatBookingDate } from "../utils/bookingDates";
 
 function GameCard({ game, refreshGames }) {
     const [chatOpen, setChatOpen] = useState(false);
@@ -68,7 +69,7 @@ function GameCard({ game, refreshGames }) {
 
                 <p>
 
-                    📅 {new Date(game.bookingId?.bookingDate).toLocaleDateString()}
+                    📅 {formatBookingDate(game.bookingId?.bookingDate)}
 
                 </p>
 

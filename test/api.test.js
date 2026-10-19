@@ -15,6 +15,12 @@ import {
 } from "../src/models/userschema.js";
 import { validateRuntimeConfig } from "../src/config/security.js";
 import { attachChatServer } from "../src/realtime/chatServer.js";
+import {
+  dateKeyInTimeZone,
+  dateRangeForBooking,
+  minutesInTimeZone,
+  slotStartInTimeZone
+} from "../src/utils/bookingDates.js";
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "nexplay-test-secret-with-sufficient-length";
@@ -258,7 +264,7 @@ test("concurrent bookings cannot reserve the same venue slot twice", async () =>
   ]);
 
   assert.equal(results.filter((result) => result.status === 201).length, 1);
-  assert.equal(results.filter((result) => [400, 409].includes(result.status)).length, 1);
+  assert.equal(results.filter((result) => result.status === 409).length, 1);
   assert.equal(await bookingModel.countDocuments({ venueId: venue._id, slot: payload.slot, status: "Booked" }), 1);
 
   const bookedEntry = await bookingModel.findOne({
@@ -267,11 +273,27 @@ test("concurrent bookings cannot reserve the same venue slot twice", async () =>
     status: "Booked"
   });
   const ownerId = bookedEntry.userId.toString();
+  const details = await request(`/bookings/${bookedEntry._id}`, { token: tokenFor(ownerId) });
+  assert.equal(details.status, 200);
+  assert.equal(details.body.booking.bookingDate, `${day}T00:00:00.000Z`);
+  assert.equal(details.body.booking.venueId.name, venue.name);
+  assert.equal(details.body.booking.cancellable, true);
+
+  const duplicate = await request("/bookings", {
+    method: "POST",
+    token: tokenFor(ownerId),
+    body: payload
+  });
+  assert.equal(duplicate.status, 409);
+
   const cancellation = await request(`/bookings/${bookedEntry._id}`, {
     method: "DELETE",
     token: tokenFor(ownerId)
   });
   assert.equal(cancellation.status, 200);
+  const history = await request("/bookings/my-bookings", { token: tokenFor(ownerId) });
+  assert.equal(history.status, 200);
+  assert.equal(history.body.bookings.find((booking) => booking._id === bookedEntry._id.toString()).status, "Cancelled");
 
   const replacement = await request("/bookings", {
     method: "POST",
@@ -279,6 +301,73 @@ test("concurrent bookings cannot reserve the same venue slot twice", async () =>
     body: payload
   });
   assert.equal(replacement.status, 201);
+});
+
+test("booking dates are calendar dates in the venue timezone and passed slots are rejected", async () => {
+  assert.equal(
+    dateRangeForBooking("2026-10-19").start.toISOString(),
+    "2026-10-19T00:00:00.000Z"
+  );
+  assert.equal(
+    slotStartInTimeZone("2026-10-19", "18:00-19:00").toISOString(),
+    "2026-10-19T12:30:00.000Z"
+  );
+
+  const user = await createUser(`date-booker-${randomUUID()}@example.test`);
+  const venue = await venueModel.create({
+    name: "Date Handling Venue",
+    sport: "Football",
+    location: "Test city",
+    pricePerHour: 650
+  });
+  const today = dateKeyInTimeZone(new Date());
+  const invalidDate = await request("/bookings", {
+    method: "POST",
+    token: tokenFor(user._id),
+    body: { venueId: venue._id.toString(), bookingDate: "2026-02-30", slot: "18:00-19:00" }
+  });
+  assert.equal(invalidDate.status, 400);
+
+  const dateTimePayload = {
+    venueId: venue._id.toString(),
+    bookingDate: `${today}T00:00:00.000Z`,
+    slot: "18:00-19:00"
+  };
+  const nonDateOnly = await request("/bookings", {
+    method: "POST",
+    token: tokenFor(user._id),
+    body: dateTimePayload
+  });
+  assert.equal(nonDateOnly.status, 400);
+
+  if (minutesInTimeZone(new Date()) >= 17 * 60) {
+    const passedSlot = await request("/bookings", {
+      method: "POST",
+      token: tokenFor(user._id),
+      body: { venueId: venue._id.toString(), bookingDate: today, slot: "16:00-17:00" }
+    });
+    assert.equal(passedSlot.status, 400);
+    assert.match(passedSlot.body.message, /already started/);
+
+    const slots = await request(`/venues/${venue._id}/slots?date=${today}`);
+    assert.equal(slots.status, 200);
+    assert.equal(slots.body.availableSlots.includes("16:00-17:00"), false);
+  }
+
+  const cancellationDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const cancellationDateKey = dateKeyInTimeZone(cancellationDate);
+  const soonBooking = await bookingModel.create({
+    userId: user._id,
+    venueId: venue._id,
+    bookingDate: new Date(`${cancellationDateKey}T00:00:00.000Z`),
+    slot: "00:00-01:00"
+  });
+  const cancellation = await request(`/bookings/${soonBooking._id}`, {
+    method: "DELETE",
+    token: tokenFor(user._id)
+  });
+  assert.equal(cancellation.status, 400);
+  assert.match(cancellation.body.message, /24 hours/);
 });
 
 test("concurrent game joins respect capacity and leaving reopens a full game", async () => {

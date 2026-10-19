@@ -1,12 +1,13 @@
 import { useState } from "react";
 import api from "../services/api";
+import { formatBookingDate } from "../utils/bookingDates";
 
 function BookingCard({ booking, onCreateGame, refreshBookings }) {
     const [cancelling, setCancelling] = useState(false);
 
     async function handleCancelBooking() {
         const confirmCancel = window.confirm(
-            "Are you sure you want to cancel this booking? Any game created from it will also be removed."
+            "You can cancel only at least 24 hours before the slot starts. Any game created from it will also be removed. Continue?"
         );
 
         if (!confirmCancel) return;
@@ -37,7 +38,11 @@ function BookingCard({ booking, onCreateGame, refreshBookings }) {
                         {venue?.name || "Venue details unavailable"}
                     </h3>
                 </div>
-                <span className="shrink-0 rounded-full border border-emerald-800 bg-emerald-950/60 px-3 py-1 text-xs font-semibold text-emerald-300">
+                <span className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${
+                    booking.status === "Cancelled"
+                        ? "border-slate-600 bg-slate-800 text-slate-300"
+                        : "border-emerald-800 bg-emerald-950/60 text-emerald-300"
+                }`}>
                     {booking.status}
                 </span>
             </div>
@@ -51,12 +56,7 @@ function BookingCard({ booking, onCreateGame, refreshBookings }) {
                 )}
                 <p className="flex gap-3">
                     <span aria-hidden="true">📅</span>
-                    <span>{new Date(booking.bookingDate).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric"
-                    })}</span>
+                    <span>{formatBookingDate(booking.bookingDate)}</span>
                 </p>
                 <p className="flex gap-3">
                     <span aria-hidden="true">🕒</span>
@@ -70,23 +70,35 @@ function BookingCard({ booking, onCreateGame, refreshBookings }) {
                 )}
             </div>
 
-            <div className="mt-auto grid grid-cols-1 gap-3 pt-6 sm:grid-cols-2">
-                <button
-                    type="button"
-                    onClick={() => onCreateGame(booking)}
-                    className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                >
-                    Create a game
-                </button>
-                <button
-                    type="button"
-                    onClick={handleCancelBooking}
-                    disabled={cancelling}
-                    className="rounded-xl border border-red-900/80 bg-red-950/30 px-4 py-3 text-sm font-semibold text-red-300 transition hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                    {cancelling ? "Cancelling..." : "Cancel booking"}
-                </button>
-            </div>
+            {booking.status === "Booked" && (
+                <>
+                    <p className="mt-5 text-xs leading-5 text-slate-500">
+                        Cancellation is available at least 24 hours before the slot starts.
+                    </p>
+                    <div className="mt-auto grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            onClick={() => onCreateGame(booking)}
+                            className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        >
+                            Create a game
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleCancelBooking}
+                            disabled={cancelling || !booking.cancellable}
+                            title={!booking.cancellable ? "Cancellation window has closed" : undefined}
+                            className="rounded-xl border border-red-900/80 bg-red-950/30 px-4 py-3 text-sm font-semibold text-red-300 transition hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {cancelling
+                                ? "Cancelling..."
+                                : booking.cancellable
+                                    ? "Cancel booking"
+                                    : "Cancellation closed"}
+                        </button>
+                    </div>
+                </>
+            )}
         </article>
     );
 }

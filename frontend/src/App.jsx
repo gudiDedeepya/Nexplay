@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Booking from "./pages/Booking";
+import BookingConfirmation from "./pages/BookingConfirmation";
 import AdminDashboard from "./pages/AdminDashboard";
 import { GameChatProvider } from "./context/GameChatContext.jsx";
 
@@ -63,6 +64,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Booking />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/booking/confirmation/:bookingId"
+            element={
+              <ProtectedRoute>
+                <BookingConfirmation />
               </ProtectedRoute>
             }
           />

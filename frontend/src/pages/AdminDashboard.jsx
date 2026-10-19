@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
+import { formatBookingDate } from "../utils/bookingDates";
 
 const emptyVenue = {
   name: "",
@@ -25,8 +26,7 @@ function fetchAdminDashboardData() {
 }
 
 function formatDate(date) {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString();
+  return formatBookingDate(date);
 }
 
 function AdminDashboard() {

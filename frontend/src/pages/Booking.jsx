@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
+import { addBookingDays, bookingDateKey } from "../utils/bookingDates";
 
 function Booking() {
 
@@ -17,12 +18,11 @@ function Booking() {
     const [slotsLoading, setSlotsLoading] = useState(false);
     const [slotsError, setSlotsError] = useState("");
     const slotsRequestId = useRef(0);
+    const [bookingError, setBookingError] = useState("");
+    const [bookingLoading, setBookingLoading] = useState(false);
 
-    const today = new Date().toISOString().split("T")[0];
-
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 10);
-    const maxBookingDate = maxDate.toISOString().split("T")[0];
+    const today = bookingDateKey();
+    const maxBookingDate = addBookingDays(today, 10);
 
     useEffect(() => {
         async function loadVenue() {
@@ -65,42 +65,33 @@ function Booking() {
     }
 
     async function handleBooking() {
-
         if (!date) {
-            alert("Please select a date");
+            setBookingError("Please select a date.");
             return;
         }
 
         if (!selectedSlot) {
-            alert("Please select a slot");
+            setBookingError("Please select a time slot.");
             return;
         }
 
+        setBookingLoading(true);
+        setBookingError("");
         try {
-
-            await api.post("/bookings", {
+            const response = await api.post("/bookings", {
                 venueId,
                 bookingDate: date,
                 slot: selectedSlot
             });
-
-            alert("Venue booked successfully!");
-
-            navigate("/profile");
-
-        }
-
-        catch (error) {
-
-            console.log(error);
-
-            alert(
-                error.response?.data?.message ||
-                "Booking failed"
+            navigate(`/booking/confirmation/${response.data.booking._id}`);
+        } catch (error) {
+            setBookingError(
+                error.response?.data?.message || "Booking failed. Please try again."
             );
-
+            if (date) await fetchAvailableSlots(date);
+        } finally {
+            setBookingLoading(false);
         }
-
     }
 
     return (
@@ -118,10 +109,13 @@ function Booking() {
                 </h1>
 
                 <p className="text-gray-400 mt-2 text-xl">
-
                     {venue ? venue.name : "Loading Venue..."}
-
                 </p>
+                {venue && (
+                    <p className="mt-2 text-sm text-slate-400">
+                        ₹{venue.pricePerHour} per hour · All booking times shown in Asia/Kolkata
+                    </p>
+                )}
 
                 <div className="mt-10">
 
@@ -216,8 +210,8 @@ function Booking() {
                                     <button
 
                                         key={slot}
-
                                         onClick={() => setSelectedSlot(slot)}
+                                        aria-pressed={selectedSlot === slot}
 
                                         className={`p-4 rounded-xl border transition ${
                                             selectedSlot === slot
@@ -241,16 +235,42 @@ function Booking() {
 
                 </div>
 
+                {selectedSlot && venue && (
+                    <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                        <h2 className="text-lg font-semibold">Booking summary</h2>
+                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                            <div>
+                                <dt className="text-slate-400">Venue</dt>
+                                <dd className="mt-1 font-medium">{venue.name}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-slate-400">Date</dt>
+                                <dd className="mt-1 font-medium">{date}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-slate-400">Time</dt>
+                                <dd className="mt-1 font-medium">{selectedSlot}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-slate-400">Price</dt>
+                                <dd className="mt-1 font-medium">₹{venue.pricePerHour} / hour</dd>
+                            </div>
+                        </dl>
+                    </div>
+                )}
+
+                {bookingError && (
+                    <p role="alert" className="mt-6 rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm text-red-200">
+                        {bookingError}
+                    </p>
+                )}
+
                 <button
-
                     onClick={handleBooking}
-
-                    className="mt-10 bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-xl font-semibold"
-
+                    disabled={bookingLoading || slotsLoading || !selectedSlot}
+                    className="mt-10 rounded-xl bg-blue-600 px-8 py-4 font-semibold transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-
-                    Book Venue
-
+                    {bookingLoading ? "Confirming booking..." : "Confirm booking"}
                 </button>
 
             </div>

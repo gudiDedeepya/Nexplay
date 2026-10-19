@@ -168,7 +168,7 @@ function Profile() {
 
                 <section aria-label="Dashboard summary" className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     {[
-                        { label: "Active bookings", value: bookings.length, icon: "📅" },
+                        { label: "Active bookings", value: bookings.filter((booking) => booking.status === "Booked").length, icon: "📅" },
                         { label: "Games created", value: myGames.length, icon: "🏆" },
                         { label: "Games joined", value: joinedGames.length, icon: "🤝" }
                     ].map((stat) => (
