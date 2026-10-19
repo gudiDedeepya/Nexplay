@@ -17,6 +17,7 @@ function mergeMessages(current, incoming) {
 function GameChatModal({ game, onClose }) {
     const { token } = useContext(AuthContext);
     const [messages, setMessages] = useState([]);
+    const [currentUserId, setCurrentUserId] = useState("");
     const [content, setContent] = useState("");
     const [connected, setConnected] = useState(false);
     const [chatReady, setChatReady] = useState(false);
@@ -25,8 +26,22 @@ function GameChatModal({ game, onClose }) {
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
+        let active = true;
         const socket = io(socketUrl, { auth: { token } });
         socketRef.current = socket;
+
+        api.get("/me")
+            .then((response) => {
+                if (active) setCurrentUserId(response.data.user._id);
+            })
+            .catch((requestError) => {
+                if (active) {
+                    setError(
+                        requestError.response?.data?.message ||
+                        "Could not load your account details."
+                    );
+                }
+            });
 
         socket.on("connect", () => {
             setConnected(true);
@@ -63,6 +78,7 @@ function GameChatModal({ game, onClose }) {
         });
 
         return () => {
+            active = false;
             socket.disconnect();
             socketRef.current = null;
         };
@@ -93,66 +109,91 @@ function GameChatModal({ game, onClose }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+        <div className="fixed inset-0 z-50 bg-slate-950">
             <section
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="game-chat-title"
-                className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900"
+                className="flex h-[100dvh] w-full flex-col overflow-hidden bg-slate-900"
             >
-                <header className="flex items-center justify-between border-b border-slate-700 p-5">
-                    <div>
-                        <h2 id="game-chat-title" className="text-xl font-bold text-white">
-                            {game.title} chat
-                        </h2>
-                        <p className="text-sm text-slate-400">
-                            {connected ? "Connected" : "Connecting..."}
-                        </p>
+                <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-700 bg-slate-900 px-4 py-3 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
+                            {game.title?.charAt(0).toUpperCase() || "G"}
+                        </div>
+                        <div className="min-w-0">
+                            <h2 id="game-chat-title" className="truncate text-lg font-bold text-white">
+                                {game.title}
+                            </h2>
+                            <p className="text-sm text-slate-400">
+                                {game.sport} · {connected ? "Online" : "Connecting..."}
+                            </p>
+                        </div>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
                         aria-label="Close chat"
-                        className="rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800"
+                        className="shrink-0 rounded-full px-4 py-2 text-slate-300 hover:bg-slate-800"
                     >
                         Close
                     </button>
                 </header>
 
-                <div className="min-h-64 flex-1 space-y-3 overflow-y-auto p-5">
+                <div className="flex-1 space-y-3 overflow-y-auto bg-slate-950/80 px-3 py-5 sm:px-8">
                     {messages.length === 0 && !error && (
-                        <p className="text-center text-slate-400">
-                            No messages yet. Start the conversation!
-                        </p>
+                        <div className="mx-auto mt-10 max-w-sm rounded-2xl border border-slate-700 bg-slate-900/90 p-4 text-center text-sm text-slate-300 shadow">
+                            Messages in this game chat are visible to joined players. Start the conversation!
+                        </div>
                     )}
-                    {messages.map((message) => (
-                        <article key={message._id} className="rounded-xl bg-slate-800 p-3">
-                            <div className="flex items-baseline justify-between gap-3">
-                                <span className="font-semibold text-blue-300">
-                                    {message.senderId?.name || "Player"}
-                                </span>
-                                <time className="text-xs text-slate-500">
-                                    {new Date(message.createdAt).toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit"
-                                    })}
-                                </time>
+                    {messages.map((message) => {
+                        const isOwnMessage =
+                            message.senderId?._id?.toString() === currentUserId;
+
+                        return (
+                            <div
+                                key={message._id}
+                                className={`flex w-full ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                            >
+                                <article
+                                    className={`max-w-[85%] rounded-2xl px-4 py-2 shadow sm:max-w-[70%] ${
+                                        isOwnMessage
+                                            ? "rounded-br-sm bg-blue-700 text-white"
+                                            : "rounded-bl-sm bg-slate-800 text-slate-100"
+                                    }`}
+                                >
+                                    {!isOwnMessage && (
+                                        <p className="mb-1 text-xs font-semibold text-sky-300">
+                                            {message.senderId?.name || "Player"}
+                                        </p>
+                                    )}
+                                    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+                                        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                                            {message.content}
+                                        </p>
+                                        <time className={`ml-auto whitespace-nowrap text-[10px] ${
+                                            isOwnMessage ? "text-blue-200" : "text-slate-400"
+                                        }`}>
+                                            {new Date(message.createdAt).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit"
+                                            })}
+                                        </time>
+                                    </div>
+                                </article>
                             </div>
-                            <p className="mt-1 whitespace-pre-wrap break-words text-slate-100">
-                                {message.content}
-                            </p>
-                        </article>
-                    ))}
+                        );
+                    })}
                     <div ref={messagesEndRef} />
                 </div>
 
                 {error && (
-                    <p role="alert" className="px-5 pb-2 text-sm text-red-400">
+                    <p role="alert" className="shrink-0 bg-slate-900 px-5 py-2 text-sm text-red-400">
                         {error}
                     </p>
                 )}
 
-                <form onSubmit={handleSubmit} className="flex gap-3 border-t border-slate-700 p-4">
+                <form onSubmit={handleSubmit} className="flex shrink-0 items-center gap-3 border-t border-slate-700 bg-slate-900 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
                     <input
                         value={content}
                         onChange={(event) => setContent(event.target.value)}
@@ -160,12 +201,12 @@ function GameChatModal({ game, onClose }) {
                         disabled={!chatReady}
                         aria-label="Chat message"
                         placeholder={chatReady ? "Write a message..." : "Connecting to chat..."}
-                        className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                        className="min-w-0 flex-1 rounded-full border border-slate-700 bg-slate-800 px-5 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     />
                     <button
                         type="submit"
                         disabled={!chatReady || !content.trim()}
-                        className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         Send
                     </button>
