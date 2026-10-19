@@ -28,15 +28,6 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 Copy `.env.example` to `.env` and update values before running the backend.
 
 Example:
-
-```env
-PORT=5000
-MONGO_URI=mongodb://127.0.0.1:27017/NEXPLAY
-JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
-FRONTEND_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
-NODE_ENV=development
-```
-
 Frontend configuration:
 
 ```env
