@@ -293,7 +293,14 @@ test("concurrent bookings cannot reserve the same venue slot twice", async () =>
   assert.equal(cancellation.status, 200);
   const history = await request("/bookings/my-bookings", { token: tokenFor(ownerId) });
   assert.equal(history.status, 200);
-  assert.equal(history.body.bookings.find((booking) => booking._id === bookedEntry._id.toString()).status, "Cancelled");
+  assert.equal(
+    history.body.bookings.some((booking) => booking._id === bookedEntry._id.toString()),
+    false
+  );
+  assert.equal(
+    await bookingModel.countDocuments({ _id: bookedEntry._id, status: "Cancelled" }),
+    1
+  );
 
   const replacement = await request("/bookings", {
     method: "POST",
@@ -417,6 +424,13 @@ test("concurrent game joins respect capacity and leaving reopens a full game", a
   const reopenedGame = await gameModel.findById(game._id);
   assert.equal(reopenedGame.joinedPlayers.length, 1);
   assert.equal(reopenedGame.status, "Open");
+  const joinedGames = await request("/games/joined-games", {
+    token: tokenFor(successfulPlayer._id)
+  });
+  assert.equal(
+    joinedGames.body.games.some((joinedGame) => joinedGame._id === game._id.toString()),
+    false
+  );
 });
 
 test("game chat persists messages and is restricted to joined players", async () => {

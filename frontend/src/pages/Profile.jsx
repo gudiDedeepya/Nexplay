@@ -102,8 +102,9 @@ function Profile() {
         .map((part) => part[0].toUpperCase())
         .join("");
 
+    const activeBookings = bookings.filter((booking) => booking.status === "Booked");
     const activeItems = {
-        bookings,
+        bookings: activeBookings,
         created: myGames,
         joined: joinedGames
     }[activeSection];
@@ -168,7 +169,7 @@ function Profile() {
 
                 <section aria-label="Dashboard summary" className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     {[
-                        { label: "Active bookings", value: bookings.filter((booking) => booking.status === "Booked").length, icon: "📅" },
+                        { label: "Active bookings", value: activeBookings.length, icon: "📅" },
                         { label: "Games created", value: myGames.length, icon: "🏆" },
                         { label: "Games joined", value: joinedGames.length, icon: "🤝" }
                     ].map((stat) => (
@@ -225,7 +226,7 @@ function Profile() {
                                     {section.label}
                                     <span className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
                                         {section.id === "bookings"
-                                            ? bookings.length
+                                            ? activeBookings.length
                                             : section.id === "created"
                                                 ? myGames.length
                                                 : joinedGames.length}
@@ -276,7 +277,7 @@ function Profile() {
                         ) : (
                             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                                 {activeSection === "bookings"
-                                    ? bookings.map((booking) => (
+                                    ? activeBookings.map((booking) => (
                                         <BookingCard
                                             key={booking._id}
                                             booking={booking}
@@ -285,7 +286,15 @@ function Profile() {
                                         />
                                     ))
                                     : activeItems.map((game) => (
-                                        <GameCardProfile key={game._id} game={game} />
+                                        <GameCardProfile
+                                            key={game._id}
+                                            game={game}
+                                            canLeave={
+                                                activeSection === "joined" &&
+                                                game.organizerId?.toString() !== user?._id?.toString()
+                                            }
+                                            onLeave={loadDashboard}
+                                        />
                                     ))}
                             </div>
                         )}

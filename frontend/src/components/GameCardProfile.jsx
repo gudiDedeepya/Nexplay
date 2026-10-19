@@ -2,10 +2,13 @@ import { useState } from "react";
 import GameChatModal from "./GameChatModal";
 import { useGameChat } from "../hooks/useGameChat";
 import { formatBookingDate } from "../utils/bookingDates";
+import api from "../services/api";
 
-function GameCardProfile({ game }) {
+function GameCardProfile({ game, canLeave = false, onLeave }) {
     const [chatOpen, setChatOpen] = useState(false);
-    const { unreadCounts } = useGameChat();
+    const [leaving, setLeaving] = useState(false);
+    const [leaveError, setLeaveError] = useState("");
+    const { unreadCounts, refreshMembership } = useGameChat();
     const unreadCount = unreadCounts[game._id] || 0;
     const booking = game.bookingId;
     const venue = booking?.venueId;
@@ -14,6 +17,24 @@ function GameCardProfile({ game }) {
         Full: "border-amber-800 bg-amber-950/60 text-amber-300",
         Cancelled: "border-red-800 bg-red-950/60 text-red-300"
     };
+
+    async function leaveGame() {
+        if (!window.confirm(`Leave "${game.title}"? You will lose access to its game chat.`)) {
+            return;
+        }
+
+        setLeaving(true);
+        setLeaveError("");
+        try {
+            await api.delete(`/games/${game._id}/leave`);
+            await refreshMembership();
+            await onLeave?.();
+        } catch (error) {
+            setLeaveError(error.response?.data?.message || "Unable to leave this game.");
+        } finally {
+            setLeaving(false);
+        }
+    }
 
     return (
         <article className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900 p-5 transition hover:border-blue-700/70 sm:p-6">
@@ -82,20 +103,35 @@ function GameCardProfile({ game }) {
                     <span>{game.skillLevel || "Beginner"} level</span>
                     <span>{game.joinedPlayers?.length || 0} players</span>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setChatOpen(true)}
-                    className="mt-5 w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
-                >
-                    <span className="inline-flex items-center justify-center gap-2">
-                        Open Game Chat
-                        {unreadCount > 0 && (
-                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-                                {unreadCount > 99 ? "99+" : unreadCount}
-                            </span>
-                        )}
-                    </span>
-                </button>
+                {leaveError && (
+                    <p role="alert" className="mt-3 text-sm text-red-300">{leaveError}</p>
+                )}
+                <div className={`mt-5 grid gap-3 ${canLeave ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+                    <button
+                        type="button"
+                        onClick={() => setChatOpen(true)}
+                        className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
+                    >
+                        <span className="inline-flex items-center justify-center gap-2">
+                            Open Game Chat
+                            {unreadCount > 0 && (
+                                <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                                    {unreadCount > 99 ? "99+" : unreadCount}
+                                </span>
+                            )}
+                        </span>
+                    </button>
+                    {canLeave && (
+                        <button
+                            type="button"
+                            onClick={leaveGame}
+                            disabled={leaving}
+                            className="w-full rounded-xl border border-red-900/80 bg-red-950/30 py-3 font-semibold text-red-300 transition hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {leaving ? "Leaving game..." : "Leave game"}
+                        </button>
+                    )}
+                </div>
             </div>
             {chatOpen && (
                 <GameChatModal game={game} onClose={() => setChatOpen(false)} />

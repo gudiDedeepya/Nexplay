@@ -10,10 +10,11 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - Venue booking for valid date and slot combinations
 - Venue-local (Asia/Kolkata) booking dates and past-slot prevention
 - Booking confirmation details and booking/cancellation status history
+- Cancelled bookings are hidden from the player booking list while retained in admin history
 - Cancellation allowed up to 6 hours before the slot starts
 - Duplicate booking protection for concurrent requests
 - Community game creation from bookings
-- Game join/leave flows
+- Game join/leave flows, including leaving joined games from the player dashboard
 - Real-time chat for joined community-game participants, with unread counts, sender/timestamp labels, paginated history, reconnect handling, and access revocation on leaving a game
 - User profile dashboard with bookings and games
 - Admin dashboard for venue management, booking history, and community games

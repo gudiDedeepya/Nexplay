@@ -88,7 +88,7 @@ router.post("/", auth, async (req, res, next) => {
 router.get("/", auth, async (req, res, next) => {
   try {
     const bookings = await bookingModel
-      .find({ userId: req.userId })
+      .find({ userId: req.userId, status: "Booked" })
       .populate("venueId");
 
     return res.status(200).json({ bookings: bookings.map(withCancellationDetails) });
@@ -100,7 +100,7 @@ router.get("/", auth, async (req, res, next) => {
 router.get("/my-bookings", auth, async (req, res, next) => {
   try {
     const bookings = await bookingModel
-      .find({ userId: req.userId })
+      .find({ userId: req.userId, status: "Booked" })
       .populate("venueId");
 
     return res.status(200).json({ bookings: bookings.map(withCancellationDetails) });
