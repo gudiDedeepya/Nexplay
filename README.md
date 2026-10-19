@@ -13,6 +13,7 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - Game join/leave flows
 - Real-time chat for joined community-game participants, with MongoDB message history
 - User profile dashboard with bookings and games
+- Admin dashboard for venue management, booking history, and community games
 
 ## Project structure
 
@@ -21,7 +22,7 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - `src/config/db.js` – MongoDB connection setup
 - `src/middlewares` – auth and error middleware
 - `src/models` – Mongoose schemas
-- `src/routes` – auth, venue, booking, and game route modules
+- `src/routes` – auth, venue, booking, game, and admin route modules
 - `frontend/` – Vite React frontend app
 
 ## Environment variables
@@ -60,7 +61,7 @@ Create a normal account first, then promote it using the backend environment's M
 npm run admin:promote -- admin@example.com
 ```
 
-Only accounts with the database `admin` role can create venues through the API. The role cannot be set through signup.
+Only accounts with the database `admin` role can access the admin dashboard and management API. The role cannot be set through signup. Admins can manage venue details and hourly operating hours, review booking/cancellation history, and delete community games. Removing a venue hides it from public listings without deleting booking history. The dashboard reports booking and game counts; revenue is not available because the platform does not process payments.
 
 ## Backend tests
 

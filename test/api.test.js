@@ -159,6 +159,85 @@ test("venue creation requires an administrator account", async () => {
   assert.equal(created.status, 201);
 });
 
+test("admin dashboard and venue management require admin access and honor venue hours", async () => {
+  const regularUser = await createUser(`admin-access-${randomUUID()}@example.test`);
+  const adminUser = await createUser(`venue-manager-${randomUUID()}@example.test`, "admin");
+  assert.equal((await request("/admin/dashboard")).status, 401);
+  assert.equal(
+    (await request("/admin/dashboard", { token: tokenFor(regularUser._id) })).status,
+    403
+  );
+
+  const venueResponse = await request("/admin/venues", {
+    method: "POST",
+    token: tokenFor(adminUser._id),
+    body: {
+      name: "Hours Test Court",
+      sport: "Tennis",
+      location: "Test city",
+      pricePerHour: 400,
+      operatingHours: { open: "18:00", close: "20:00" }
+    }
+  });
+  assert.equal(venueResponse.status, 201);
+  const venueId = venueResponse.body.venue._id;
+
+  const updatedVenue = await request(`/admin/venues/${venueId}`, {
+    method: "PUT",
+    token: tokenFor(adminUser._id),
+    body: {
+      name: "Hours Test Court",
+      sport: "Tennis",
+      location: "Updated test city",
+      pricePerHour: 450,
+      operatingHours: { open: "18:00", close: "20:00" }
+    }
+  });
+  assert.equal(updatedVenue.status, 200);
+  assert.equal(updatedVenue.body.venue.pricePerHour, 450);
+
+  const bookingDate = new Date();
+  bookingDate.setDate(bookingDate.getDate() + 2);
+  const day = bookingDate.toISOString().slice(0, 10);
+  const beforeOpen = await request("/bookings", {
+    method: "POST",
+    token: tokenFor(regularUser._id),
+    body: { venueId, bookingDate: day, slot: "16:00-17:00" }
+  });
+  assert.equal(beforeOpen.status, 400);
+
+  const booking = await request("/bookings", {
+    method: "POST",
+    token: tokenFor(regularUser._id),
+    body: { venueId, bookingDate: day, slot: "18:00-19:00" }
+  });
+  assert.equal(booking.status, 201);
+
+  const slots = await request(`/venues/${venueId}/slots?date=${day}`);
+  assert.equal(slots.status, 200);
+  assert.deepEqual(slots.body.availableSlots, ["19:00-20:00"]);
+
+  const dashboard = await request("/admin/dashboard", { token: tokenFor(adminUser._id) });
+  assert.equal(dashboard.status, 200);
+  assert.equal(dashboard.body.metrics.revenueTracked, false);
+  assert.equal(dashboard.body.metrics.activeBookings, 1);
+  assert.ok(dashboard.body.metrics.venueCount >= 2);
+
+  const history = await request("/admin/bookings", { token: tokenFor(adminUser._id) });
+  assert.equal(history.status, 200);
+  assert.equal(history.body.bookings.length, 1);
+  assert.equal(history.body.bookings[0].userId.email, regularUser.email);
+
+  const deactivated = await request(`/admin/venues/${venueId}`, {
+    method: "DELETE",
+    token: tokenFor(adminUser._id)
+  });
+  assert.equal(deactivated.status, 200);
+  const publicVenues = await request("/venues");
+  assert.equal(publicVenues.body.venues.some((venue) => venue._id === venueId), false);
+  assert.equal(await bookingModel.countDocuments({ venueId }), 1);
+});
+
 test("concurrent bookings cannot reserve the same venue slot twice", async () => {
   const venue = await venueModel.create({
     name: "Booking Test Venue",

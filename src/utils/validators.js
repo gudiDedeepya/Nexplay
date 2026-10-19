@@ -34,7 +34,15 @@ export function validateSigninData({ email, password }) {
   return null;
 }
 
-export function validateVenueData({ name, sport, location, pricePerHour }) {
+export function validateVenueData({
+  name,
+  sport,
+  location,
+  pricePerHour,
+  operatingHours,
+  image,
+  description
+}) {
   if (!isNonEmptyString(name)) {
     return "Venue name is required.";
   }
@@ -47,8 +55,36 @@ export function validateVenueData({ name, sport, location, pricePerHour }) {
     return "Venue location is required.";
   }
 
-  if (pricePerHour === undefined || pricePerHour === null || Number(pricePerHour) <= 0) {
+  if (
+    pricePerHour === undefined ||
+    pricePerHour === null ||
+    !Number.isFinite(Number(pricePerHour)) ||
+    Number(pricePerHour) <= 0
+  ) {
     return "Price per hour must be a positive number.";
+  }
+
+  if (image !== undefined && image !== "" && !isNonEmptyString(image)) {
+    return "Venue image URL must be a string.";
+  }
+
+  if (description !== undefined && typeof description !== "string") {
+    return "Venue description must be a string.";
+  }
+
+  if (operatingHours !== undefined) {
+    const timeToMinutes = (value) => {
+      if (typeof value !== "string" || !/^([01]\d|2[0-3]):00$/.test(value)) {
+        return null;
+      }
+      return Number(value.slice(0, 2)) * 60;
+    };
+
+    const openMinutes = timeToMinutes(operatingHours?.open);
+    const closeMinutes = timeToMinutes(operatingHours?.close);
+    if (openMinutes === null || closeMinutes === null || closeMinutes <= openMinutes) {
+      return "Operating hours must be whole-hour times, with closing after opening.";
+    }
   }
 
   return null;

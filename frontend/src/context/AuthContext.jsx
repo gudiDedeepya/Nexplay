@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { AuthContext } from "./authContext";
+import api from "../services/api";
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [roleState, setRoleState] = useState({ token: null, role: null });
+  const role = roleState.token === token ? roleState.role : null;
 
   useEffect(() => {
     const syncToken = () => setToken(localStorage.getItem("token"));
@@ -10,6 +13,24 @@ export function AuthProvider({ children }) {
 
     return () => window.removeEventListener("storage", syncToken);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    if (token) {
+      api.get("/me")
+        .then(({ data }) => {
+          if (active) setRoleState({ token, role: data.user.role });
+        })
+        .catch(() => {
+          if (active) setRoleState({ token, role: null });
+        });
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   const login = (newToken) => {
     localStorage.setItem("token", newToken);
@@ -25,10 +46,12 @@ export function AuthProvider({ children }) {
     () => ({
       token,
       isAuthenticated: Boolean(token),
+      role,
+      isAdmin: role === "admin",
       login,
       logout
     }),
-    [token]
+    [token, role]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

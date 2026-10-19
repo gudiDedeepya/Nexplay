@@ -21,7 +21,12 @@ const venueSchema = new Schema(
     location: { type: String, required: true },
     pricePerHour: { type: Number, required: true },
     image: { type: String },
-    description: { type: String }
+    description: { type: String },
+    operatingHours: {
+      open: { type: String, default: "16:00" },
+      close: { type: String, default: "21:00" }
+    },
+    active: { type: Boolean, default: true }
   },
   { timestamps: true }
 );

@@ -7,9 +7,9 @@ import {
   venueModel
 } from "../models/userschema.js";
 import { validateBookingData } from "../utils/validators.js";
+import { getVenueSlots } from "../utils/venueSlots.js";
 
 const router = express.Router();
-const SLOTS = ["16:00-17:00", "17:00-18:00", "18:00-19:00", "19:00-20:00", "20:00-21:00"];
 
 router.post("/", auth, async (req, res, next) => {
   try {
@@ -19,13 +19,13 @@ router.post("/", auth, async (req, res, next) => {
     }
 
     const { venueId, bookingDate, slot } = req.body;
-    const venue = await venueModel.findById(venueId);
+    const venue = await venueModel.findOne({ _id: venueId, active: { $ne: false } });
 
     if (!venue) {
       return res.status(404).json({ message: "Venue not found" });
     }
 
-    if (!SLOTS.includes(slot)) {
+    if (!getVenueSlots(venue.operatingHours).includes(slot)) {
       return res.status(400).json({ message: "Invalid slot" });
     }
 

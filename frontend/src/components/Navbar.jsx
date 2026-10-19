@@ -4,7 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 
 function Navbar() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   function handleLogout() {
@@ -22,6 +22,7 @@ function Navbar() {
           <Link to="/venues" className="hover:text-blue-500">Venues</Link>
           <Link to="/games" className="hover:text-blue-500">Games</Link>
           <Link to="/profile" className="hover:text-blue-500">Profile</Link>
+          {isAdmin && <Link to="/admin" className="hover:text-blue-500">Admin</Link>}
           <button onClick={handleLogout} className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg">
             Logout
           </button>
@@ -38,6 +39,7 @@ function Navbar() {
           <Link to="/venues" onClick={() => setMenuOpen(false)}>Venues</Link>
           <Link to="/games" onClick={() => setMenuOpen(false)}>Games</Link>
           <Link to="/profile" onClick={() => setMenuOpen(false)}>Profile</Link>
+          {isAdmin && <Link to="/admin" onClick={() => setMenuOpen(false)}>Admin</Link>}
           <button onClick={handleLogout} className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg">
             Logout
           </button>
