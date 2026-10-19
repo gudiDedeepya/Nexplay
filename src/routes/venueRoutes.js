@@ -1,10 +1,8 @@
 import express from "express";
 import mongoose from "mongoose";
 import { auth, requireAdmin } from "../middlewares/authmiddleware.js";
-import { bookingModel, venueModel, venueReviewModel } from "../models/userschema.js";
+import { bookingModel, venueModel } from "../models/userschema.js";
 import { validateVenueData } from "../utils/validators.js";
-import { normalizeVenueData } from "../utils/venueData.js";
-import { withVenueReviewStats } from "../utils/venueReviewStats.js";
 import { getVenueSlots } from "../utils/venueSlots.js";
 import {
   addCalendarDays,
@@ -13,7 +11,6 @@ import {
   dateRangeForBooking,
   minutesInTimeZone,
   parseBookingDate,
-  slotStartInTimeZone
 } from "../utils/bookingDates.js";
 
 const router = express.Router();
@@ -29,104 +26,7 @@ router.get("/:venueId", async (req, res, next) => {
       return res.status(404).json({ message: "Venue not found" });
     }
 
-    const [venueWithStats] = await withVenueReviewStats([venue]);
-    return res.status(200).json({ venue: venueWithStats });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get("/:venueId/reviews", auth, async (req, res, next) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.venueId)) {
-      return res.status(400).json({ message: "Invalid venue ID" });
-    }
-    const venue = await venueModel.findOne({
-      _id: req.params.venueId,
-      active: { $ne: false }
-    });
-    if (!venue) {
-      return res.status(404).json({ message: "Venue not found" });
-    }
-
-    const [reviews, bookings] = await Promise.all([
-      venueReviewModel
-        .find({ venueId: venue._id })
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .populate("userId", "name"),
-      bookingModel.find({ venueId: venue._id, userId: req.userId, status: "Booked" })
-    ]);
-    const reviewedBookingIds = new Set(
-      (await venueReviewModel.find({ userId: req.userId }).select("bookingId"))
-        .map((review) => review.bookingId.toString())
-    );
-    const eligibleBookings = bookings
-      .filter((booking) => isCompletedBooking(booking) && !reviewedBookingIds.has(booking._id.toString()))
-      .map((booking) => ({
-        _id: booking._id,
-        bookingDate: booking.bookingDate,
-        slot: booking.slot
-      }));
-
-    return res.status(200).json({ reviews, eligibleBookings });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post("/:venueId/reviews", auth, async (req, res, next) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.venueId)) {
-      return res.status(400).json({ message: "Invalid venue ID" });
-    }
-    const { bookingId, rating, text = "" } = req.body;
-    if (!mongoose.isValidObjectId(bookingId)) {
-      return res.status(400).json({ message: "A valid completed booking is required." });
-    }
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      return res.status(400).json({ message: "Rating must be a whole number from 1 to 5." });
-    }
-    if (typeof text !== "string" || text.trim().length > 1000) {
-      return res.status(400).json({ message: "Review text must be 1000 characters or fewer." });
-    }
-
-    const booking = await bookingModel.findOne({
-      _id: bookingId,
-      venueId: req.params.venueId,
-      userId: req.userId,
-      status: "Booked"
-    });
-    if (!booking || !isCompletedBooking(booking)) {
-      return res.status(403).json({
-        message: "You can review a venue only after your booking has finished."
-      });
-    }
-
-    const venue = await venueModel.findOne({
-      _id: req.params.venueId,
-      active: { $ne: false }
-    });
-    if (!venue) {
-      return res.status(404).json({ message: "Venue not found" });
-    }
-
-    try {
-      const review = await venueReviewModel.create({
-        venueId: venue._id,
-        bookingId: booking._id,
-        userId: req.userId,
-        rating,
-        text: text.trim()
-      });
-      await review.populate("userId", "name");
-      return res.status(201).json({ message: "Review added", review });
-    } catch (error) {
-      if (error.code === 11000) {
-        return res.status(409).json({ message: "This booking has already been reviewed." });
-      }
-      throw error;
-    }
+    return res.status(200).json({ venue });
   } catch (error) {
     next(error);
   }
@@ -139,7 +39,14 @@ router.post("/", auth, requireAdmin, async (req, res, next) => {
       return res.status(400).json({ message: validationError });
     }
 
-    const venue = await venueModel.create(normalizeVenueData(req.body));
+    const { name, sport, location, pricePerHour, description } = req.body;
+    const venue = await venueModel.create({
+      name,
+      sport,
+      location,
+      pricePerHour: Number(pricePerHour),
+      description
+    });
 
     return res.status(201).json({ message: "Venue created successfully", venue });
   } catch (error) {
@@ -241,7 +148,7 @@ router.get("/", async (req, res, next) => {
       });
     }
 
-    return res.status(200).json({ venues: await withVenueReviewStats(venues) });
+    return res.status(200).json({ venues });
   } catch (error) {
     next(error);
   }
@@ -287,11 +194,3 @@ router.get("/:venueId/slots", async (req, res, next) => {
 });
 
 export default router;
-
-function isCompletedBooking(booking) {
-  const match = /^([01]\d|2[0-3]):00-([01]\d|2[0-3]):00$/.exec(booking.slot);
-  if (!match || Number(match[2]) !== Number(match[1]) + 1) return false;
-  const dateKey = booking.bookingDate.toISOString().slice(0, 10);
-  const endTime = slotStartInTimeZone(dateKey, booking.slot).getTime() + 60 * 60 * 1000;
-  return endTime <= Date.now();
-}

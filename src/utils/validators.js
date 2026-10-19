@@ -41,9 +41,6 @@ export function validateVenueData({
   pricePerHour,
   operatingHours,
   image,
-  images,
-  facilities,
-  amenities,
   description
 }) {
   if (!isNonEmptyString(name)) {
@@ -71,31 +68,14 @@ export function validateVenueData({
     return "Venue image URL must be a string.";
   }
 
-  for (const [label, values, maxCount, maxLength] of [
-    ["Venue photos", images, 10, 2048],
-    ["Facilities", facilities, 30, 80],
-    ["Amenities", amenities, 30, 80]
-  ]) {
-    if (values !== undefined) {
-      if (
-        !Array.isArray(values) ||
-        values.length > maxCount ||
-        values.some((value) => !isNonEmptyString(value) || value.trim().length > maxLength)
-      ) {
-        return `${label} must be a list of at most ${maxCount} non-empty entries.`;
-      }
-    }
-  }
-
-  for (const imageUrl of [image, ...(images || [])]) {
-    if (!imageUrl) continue;
+  if (image) {
     try {
-      const url = new URL(imageUrl);
+      const url = new URL(image);
       if (!["http:", "https:"].includes(url.protocol)) {
-        return "Venue photo URLs must use HTTP or HTTPS.";
+        return "Venue image URLs must use HTTP or HTTPS.";
       }
     } catch {
-      return "Venue photo URLs must be valid HTTP or HTTPS URLs.";
+      return "Venue image URLs must be valid HTTP or HTTPS URLs.";
     }
   }
 

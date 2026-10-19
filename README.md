@@ -7,8 +7,6 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - User signup and signin
 - JWT-based protected routes
 - Venue listing with name/location search and sport and price filters
-- Venue detail pages with admin-managed photo URLs, facilities, amenities, opening hours, and player reviews
-- Verified venue reviews after a completed booking, limited to one review per booking
 - Venue booking for valid date and slot combinations
 - Venue-local (Asia/Kolkata) booking dates and past-slot prevention
 - Booking confirmation details and booking/cancellation status history

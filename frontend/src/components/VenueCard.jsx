@@ -53,16 +53,6 @@ function VenueCard({ venue }) {
 
                 </p>
 
-                <p className="mt-2 text-sm text-amber-300" aria-label={
-                    venue.reviewCount
-                        ? `${venue.averageRating} out of 5 from ${venue.reviewCount} reviews`
-                        : "No reviews yet"
-                }>
-                    {venue.reviewCount
-                        ? `★ ${venue.averageRating} · ${venue.reviewCount} ${venue.reviewCount === 1 ? "review" : "reviews"}`
-                        : "No reviews yet"}
-                </p>
-
                 <p className="text-gray-400 mt-2">
 
                     📍 {venue.location}
@@ -75,22 +65,13 @@ function VenueCard({ venue }) {
 
                 </p>
 
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                    <button
-                        type="button"
-                        onClick={() => navigate(`/venues/${venue._id}`)}
-                        className="rounded-xl border border-slate-700 py-3 font-semibold text-slate-200 transition hover:bg-slate-800"
-                    >
-                        Details & reviews
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigate(`/book/${venue._id}`)}
-                        className="rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
-                    >
-                        Book now
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => navigate(`/book/${venue._id}`)}
+                    className="mt-6 w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
+                >
+                    Book now
+                </button>
 
             </div>
 

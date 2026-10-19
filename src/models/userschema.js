@@ -21,9 +21,6 @@ const venueSchema = new Schema(
     location: { type: String, required: true },
     pricePerHour: { type: Number, required: true },
     image: { type: String },
-    images: [{ type: String }],
-    facilities: [{ type: String }],
-    amenities: [{ type: String }],
     description: { type: String },
     operatingHours: {
       open: { type: String, default: "16:00" },
@@ -84,19 +81,6 @@ const chatMessageSchema = new Schema(
 );
 chatMessageSchema.index({ gameId: 1, createdAt: -1 });
 
-const venueReviewSchema = new Schema(
-  {
-    venueId: { type: Schema.Types.ObjectId, ref: "Venue", required: true },
-    bookingId: { type: Schema.Types.ObjectId, ref: "Booking", required: true },
-    userId: { type: Schema.Types.ObjectId, ref: "user", required: true },
-    rating: { type: Number, required: true, min: 1, max: 5 },
-    text: { type: String, default: "", trim: true, maxlength: 1000 }
-  },
-  { timestamps: true }
-);
-venueReviewSchema.index({ bookingId: 1 }, { unique: true });
-venueReviewSchema.index({ venueId: 1, createdAt: -1 });
-
 bookingSchema.index(
   { venueId: 1, bookingDate: 1, slot: 1 },
   {
@@ -110,4 +94,3 @@ export const gameModel = model("Game", gameSchema);
 export const venueModel = model("Venue", venueSchema);
 export const userModel = model("user", userSchema);
 export const chatMessageModel = model("ChatMessage", chatMessageSchema);
-export const venueReviewModel = model("VenueReview", venueReviewSchema);
