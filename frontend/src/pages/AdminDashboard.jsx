@@ -38,8 +38,11 @@ function AdminDashboard() {
   const [games, setGames] = useState([]);
   const [form, setForm] = useState(emptyVenue);
   const [editingVenueId, setEditingVenueId] = useState(null);
+  const [venueFormOpen, setVenueFormOpen] = useState(false);
+  const [venueToRemove, setVenueToRemove] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [removingVenue, setRemovingVenue] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -117,12 +120,14 @@ function AdminDashboard() {
       }
     });
     setActiveTab("Venues");
+    setVenueFormOpen(true);
     setNotice("");
   }
 
   function resetForm() {
     setForm(emptyVenue);
     setEditingVenueId(null);
+    setVenueFormOpen(false);
   }
 
   async function saveVenue(event) {
@@ -153,16 +158,19 @@ function AdminDashboard() {
   }
 
   async function deactivateVenue(venue) {
-    if (!window.confirm(`Remove ${venue.name} from public listings?`)) return;
+    setRemovingVenue(true);
     setError("");
     setNotice("");
     try {
       await api.delete(`/admin/venues/${venue._id}`);
       setNotice(`${venue.name} is no longer listed.`);
       if (editingVenueId === venue._id) resetForm();
+      setVenueToRemove(null);
       await loadDashboard();
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Unable to remove this venue.");
+    } finally {
+      setRemovingVenue(false);
     }
   }
 
@@ -291,122 +299,102 @@ function AdminDashboard() {
         )}
 
         {activeTab === "Venues" && (
-          <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
-              <table className="w-full min-w-[650px] text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="p-4">Venue</th>
-                    <th className="p-4">Sport</th>
-                    <th className="p-4">Price/hour</th>
-                    <th className="p-4">Listing</th>
-                    <th className="p-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {venues.map((venue) => (
-                    <tr key={venue._id} className="border-b border-slate-800/80 last:border-0">
-                      <td className="p-4">
-                        <p className="font-semibold">{venue.name}</p>
-                        <p className="mt-1 text-xs text-slate-400">{venue.location}</p>
-                      </td>
-                      <td className="p-4">{venue.sport}</td>
-                      <td className="p-4">{venue.pricePerHour}</td>
-                      <td className="p-4">{venue.active === false ? "Inactive" : "Active"}</td>
-                      <td className="p-4">
-                        <div className="flex gap-3">
-                          <button type="button" onClick={() => startEditing(venue)} className="text-blue-300 hover:text-blue-200">
-                            Edit
-                          </button>
-                          {venue.active !== false && (
-                            <button type="button" onClick={() => deactivateVenue(venue)} className="text-red-300 hover:text-red-200">
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {!venues.length && (
-                    <tr><td className="p-5 text-slate-400" colSpan="5">No venues found.</td></tr>
-                  )}
-                </tbody>
-              </table>
+          <section className="mt-6">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Venue listings</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Update venue details or remove a venue from public listings.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(emptyVenue);
+                  setEditingVenueId(null);
+                  setVenueFormOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <span aria-hidden="true" className="text-lg leading-none">+</span>
+                Add venue
+              </button>
             </div>
 
-            <form onSubmit={saveVenue} className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold">{editingVenueId ? "Edit venue" : "Add venue"}</h2>
-                {editingVenueId && (
-                  <button type="button" onClick={resetForm} className="text-sm text-slate-400 hover:text-white">
-                    Cancel edit
-                  </button>
-                )}
-              </div>
-              {[
-                ["name", "Venue name", "text"],
-                ["location", "Location", "text"],
-                ["pricePerHour", "Price per hour", "number"],
-                ["image", "Image URL (optional)", "url"]
-              ].map(([name, label, type]) => (
-                <label key={name} className="block text-sm text-slate-300">
-                  {label}
-                  <input
-                    name={name}
-                    type={type}
-                    min={type === "number" ? "0.01" : undefined}
-                    step={type === "number" ? "0.01" : undefined}
-                    value={form[name]}
-                    onChange={updateForm}
-                    required={name !== "image"}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
-                  />
-                </label>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {venues.map((venue) => (
+                <article
+                  key={venue._id}
+                  className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/10 transition hover:border-slate-700"
+                >
+                  <div className="flex items-start justify-between gap-4 p-5">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-lg font-semibold text-white">{venue.name}</h3>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            venue.active === false
+                              ? "bg-slate-800 text-slate-400"
+                              : "bg-emerald-500/10 text-emerald-300"
+                          }`}
+                        >
+                          {venue.active === false ? "Inactive" : "Active"}
+                        </span>
+                      </div>
+                      <p className="mt-2 truncate text-sm text-slate-400">{venue.location}</p>
+                    </div>
+                    <span className="shrink-0 rounded-xl bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300">
+                      {venue.sport}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 border-y border-slate-800 px-5 py-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Price / hour</p>
+                      <p className="mt-1 font-semibold text-slate-100">{venue.pricePerHour}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Hours</p>
+                      <p className="mt-1 font-semibold text-slate-100">
+                        {venue.operatingHours?.open || "16:00"}–{venue.operatingHours?.close || "21:00"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 p-4">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(venue)}
+                      className="flex-1 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-sm font-semibold text-blue-200 transition hover:border-blue-400/60 hover:bg-blue-500/20 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      Edit venue
+                    </button>
+                    {venue.active !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setVenueToRemove(venue)}
+                        className="flex-1 rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2.5 text-sm font-semibold text-red-300 transition hover:border-red-400/50 hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-300"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </article>
               ))}
-              <label className="block text-sm text-slate-300">
-                Sport
-                <select name="sport" value={form.sport} onChange={updateForm} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white">
-                  {["Football", "Cricket", "Badminton", "Basketball", "Kabaddi", "Tennis", "Volleyball"].map((sport) => (
-                    <option key={sport}>{sport}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  ["open", "Opens at"],
-                  ["close", "Closes at"]
-                ].map(([name, label]) => (
-                  <label key={name} className="block text-sm text-slate-300">
-                    {label}
-                    <input
-                      type="time"
-                      name={name}
-                      value={form.operatingHours[name]}
-                      onChange={updateForm}
-                      required
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
-                    />
-                  </label>
-                ))}
-              </div>
-              <label className="block text-sm text-slate-300">
-                Description (optional)
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={updateForm}
-                  rows="3"
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50"
-              >
-                {saving ? "Saving..." : editingVenueId ? "Save changes" : "Create venue"}
-              </button>
-            </form>
+              {!venues.length && (
+                <div className="col-span-full rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-6 py-12 text-center">
+                  <h3 className="text-lg font-semibold">No venues yet</h3>
+                  <p className="mt-2 text-sm text-slate-400">Add your first venue to make it available to players.</p>
+                  <button
+                    type="button"
+                    onClick={() => setVenueFormOpen(true)}
+                    className="mt-5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
+                  >
+                    Add your first venue
+                  </button>
+                </div>
+              )}
+            </div>
           </section>
         )}
 
@@ -470,6 +458,193 @@ function AdminDashboard() {
               </tbody>
             </table>
           </section>
+        )}
+
+        {venueFormOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !saving) resetForm();
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="venue-form-title"
+              className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50"
+            >
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-800 bg-slate-900/95 p-5 backdrop-blur sm:p-7">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300">
+                    Venue management
+                  </p>
+                  <h2 id="venue-form-title" className="mt-2 text-2xl font-bold">
+                    {editingVenueId ? "Edit venue" : "Add a venue"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {editingVenueId
+                      ? "Update the details players see when booking."
+                      : "Add venue details and booking hours for players."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={saving}
+                  aria-label="Close venue form"
+                  className="rounded-lg p-2 text-xl leading-none text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={saveVenue} className="space-y-5 p-5 sm:p-7">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    ["name", "Venue name", "text", "e.g. Riverside Sports Arena"],
+                    ["location", "Location", "text", "City or neighborhood"],
+                    ["pricePerHour", "Price per hour", "number", "e.g. 500"],
+                    ["image", "Image URL (optional)", "url", "https://..."]
+                  ].map(([name, label, type, placeholder]) => (
+                    <label key={name} className="block text-sm font-medium text-slate-300">
+                      {label}
+                      <input
+                        name={name}
+                        type={type}
+                        placeholder={placeholder}
+                        min={type === "number" ? "0.01" : undefined}
+                        step={type === "number" ? "0.01" : undefined}
+                        value={form[name]}
+                        onChange={updateForm}
+                        required={name !== "image"}
+                        className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </label>
+                  ))}
+
+                  <label className="block text-sm font-medium text-slate-300">
+                    Sport
+                    <select
+                      name="sport"
+                      value={form.sport}
+                      onChange={updateForm}
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      {["Football", "Cricket", "Badminton", "Basketball", "Kabaddi", "Tennis", "Volleyball"].map((sport) => (
+                        <option key={sport}>{sport}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      ["open", "Opens at"],
+                      ["close", "Closes at"]
+                    ].map(([name, label]) => (
+                      <label key={name} className="block text-sm font-medium text-slate-300">
+                        {label}
+                        <input
+                          type="time"
+                          name={name}
+                          value={form.operatingHours[name]}
+                          onChange={updateForm}
+                          required
+                          className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="block text-sm font-medium text-slate-300">
+                  Description <span className="font-normal text-slate-500">— optional</span>
+                  <textarea
+                    name="description"
+                    value={form.description}
+                    onChange={updateForm}
+                    rows="3"
+                    placeholder="Add useful details about the venue..."
+                    className="mt-2 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </label>
+
+                {error && (
+                  <p role="alert" className="rounded-xl border border-red-800/80 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+                    {error}
+                  </p>
+                )}
+
+                <div className="flex flex-col-reverse gap-3 border-t border-slate-800 pt-5 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    disabled={saving}
+                    className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "Saving venue..." : editingVenueId ? "Save changes" : "Create venue"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {venueToRemove && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !removingVenue) setVenueToRemove(null);
+            }}
+          >
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="remove-venue-title"
+              aria-describedby="remove-venue-description"
+              className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-900 p-6 shadow-2xl shadow-black/50 sm:p-7"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500/10 text-xl text-red-300">
+                !
+              </div>
+              <h2 id="remove-venue-title" className="mt-5 text-xl font-bold">
+                Remove this venue?
+              </h2>
+              <p id="remove-venue-description" className="mt-2 text-sm leading-6 text-slate-400">
+                <span className="font-semibold text-slate-200">{venueToRemove.name}</span> will no longer
+                appear in public listings or accept new bookings. Existing booking history will be kept.
+              </p>
+              {error && (
+                <p role="alert" className="mt-4 rounded-xl border border-red-800/80 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+                  {error}
+                </p>
+              )}
+              <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setVenueToRemove(null)}
+                  disabled={removingVenue}
+                  className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                >
+                  Keep venue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deactivateVenue(venueToRemove)}
+                  disabled={removingVenue}
+                  className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {removingVenue ? "Removing..." : "Remove venue"}
+                </button>
+              </div>
+            </section>
+          </div>
         )}
       </main>
     </div>
