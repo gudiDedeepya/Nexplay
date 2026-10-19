@@ -24,6 +24,9 @@ export function attachChatServer(httpServer, allowedOrigins) {
       }
 
       decoded = jwt.verify(token, getJwtSecret());
+      if (!Number.isFinite(decoded.exp)) {
+        return next(new Error("Authentication token must have an expiration"));
+      }
     } catch (error) {
       if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
         return next(new Error("Invalid or expired authentication token"));
@@ -39,6 +42,7 @@ export function attachChatServer(httpServer, allowedOrigins) {
       }
 
       socket.data.userId = user._id.toString();
+      socket.data.tokenExpiresAt = decoded.exp * 1000;
       return next();
     } catch (error) {
       console.error("Could not authenticate chat connection:", error);
@@ -47,6 +51,13 @@ export function attachChatServer(httpServer, allowedOrigins) {
   });
 
   io.on("connection", (socket) => {
+    const expirationTimer = setTimeout(
+      () => socket.disconnect(true),
+      Math.max(0, socket.data.tokenExpiresAt - Date.now())
+    );
+    expirationTimer.unref?.();
+    socket.once("disconnect", () => clearTimeout(expirationTimer));
+
     socket.on("game:join", async (payload, acknowledge) => {
       const reply = typeof acknowledge === "function" ? acknowledge : () => {};
 

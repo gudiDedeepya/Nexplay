@@ -27,7 +27,9 @@ let baseUrl;
 let server;
 
 function tokenFor(userId) {
-  return jwt.sign({ userId: userId.toString() }, process.env.JWT_SECRET);
+  return jwt.sign({ userId: userId.toString() }, process.env.JWT_SECRET, {
+    expiresIn: "1h"
+  });
 }
 
 async function createUser(email, role = "user") {
@@ -341,6 +343,36 @@ test("game chat persists messages and is restricted to joined players", async ()
       assert.equal(outsiderJoin.ok, false);
     } finally {
       outsiderSocket.disconnect();
+    }
+
+    const expiringSocket = connectSocket(baseUrl.replace("/api/v1", ""), {
+      auth: {
+        token: jwt.sign(
+          { userId: participant._id.toString() },
+          process.env.JWT_SECRET,
+          { expiresIn: "1s" }
+        )
+      },
+      forceNew: true,
+      reconnection: false
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        expiringSocket.once("connect", resolve);
+        expiringSocket.once("connect_error", reject);
+      });
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error("Socket stayed connected after its JWT expired")),
+          5000
+        );
+        expiringSocket.once("disconnect", (reason) => {
+          clearTimeout(timeout);
+          resolve(reason);
+        });
+      }).then((reason) => assert.equal(reason, "io server disconnect"));
+    } finally {
+      expiringSocket.disconnect();
     }
 
     const cancellation = await request(`/bookings/${booking._id}`, {
