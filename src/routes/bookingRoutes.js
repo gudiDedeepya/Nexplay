@@ -149,11 +149,11 @@ router.delete("/:bookingId", auth, async (req, res, next) => {
 
     const dateKey = booking.bookingDate.toISOString().slice(0, 10);
     const cancellationDeadline = new Date(
-      slotStartInTimeZone(dateKey, booking.slot).getTime() - 24 * 60 * 60 * 1000
+      slotStartInTimeZone(dateKey, booking.slot).getTime() - 6 * 60 * 60 * 1000
     );
     if (Date.now() > cancellationDeadline.getTime()) {
       return res.status(400).json({
-        message: "Bookings can only be cancelled at least 24 hours before the slot starts"
+        message: "Bookings can only be cancelled at least 6 hours before the slot starts"
       });
     }
 
@@ -180,7 +180,7 @@ router.delete("/:bookingId", auth, async (req, res, next) => {
 function withCancellationDetails(booking) {
   const dateKey = booking.bookingDate.toISOString().slice(0, 10);
   const cancellationDeadline = new Date(
-    slotStartInTimeZone(dateKey, booking.slot).getTime() - 24 * 60 * 60 * 1000
+    slotStartInTimeZone(dateKey, booking.slot).getTime() - 6 * 60 * 60 * 1000
   );
   return {
     ...booking.toObject(),

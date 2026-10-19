@@ -7,7 +7,7 @@ function BookingCard({ booking, onCreateGame, refreshBookings }) {
 
     async function handleCancelBooking() {
         const confirmCancel = window.confirm(
-            "You can cancel only at least 24 hours before the slot starts. Any game created from it will also be removed. Continue?"
+            "You can cancel only at least 6 hours before the slot starts. Any game created from it will also be removed. Continue?"
         );
 
         if (!confirmCancel) return;
@@ -73,7 +73,7 @@ function BookingCard({ booking, onCreateGame, refreshBookings }) {
             {booking.status === "Booked" && (
                 <>
                     <p className="mt-5 text-xs leading-5 text-slate-500">
-                        Cancellation is available at least 24 hours before the slot starts.
+                        Cancellation is available at least 6 hours before the slot starts.
                     </p>
                     <div className="mt-auto grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2">
                         <button

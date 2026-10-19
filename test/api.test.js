@@ -354,7 +354,7 @@ test("booking dates are calendar dates in the venue timezone and passed slots ar
     assert.equal(slots.body.availableSlots.includes("16:00-17:00"), false);
   }
 
-  const cancellationDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const cancellationDate = new Date(Date.now() + 5 * 60 * 60 * 1000);
   const cancellationDateKey = dateKeyInTimeZone(cancellationDate);
   const soonBooking = await bookingModel.create({
     userId: user._id,
@@ -367,7 +367,7 @@ test("booking dates are calendar dates in the venue timezone and passed slots ar
     token: tokenFor(user._id)
   });
   assert.equal(cancellation.status, 400);
-  assert.match(cancellation.body.message, /24 hours/);
+  assert.match(cancellation.body.message, /6 hours/);
 });
 
 test("concurrent game joins respect capacity and leaving reopens a full game", async () => {

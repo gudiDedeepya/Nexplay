@@ -136,7 +136,7 @@ function BookingConfirmation() {
                             <div className="mt-6 rounded-2xl border border-amber-900/70 bg-amber-950/25 p-4">
                                 <h3 className="font-semibold text-amber-200">Cancellation policy</h3>
                                 <p className="mt-1 text-sm leading-6 text-amber-100/80">
-                                    You can cancel at least 24 hours before the slot starts. After that
+                                    You can cancel at least 6 hours before the slot starts. After that
                                     cutoff, the booking cannot be cancelled.
                                 </p>
                             </div>
