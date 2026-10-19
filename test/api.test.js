@@ -406,6 +406,27 @@ test("game chat persists messages and is restricted to joined players", async ()
     assert.equal(history.body.messages[0].senderId.name, "Test Player");
     assert.equal(await chatMessageModel.countDocuments({ gameId: game._id }), 1);
 
+    await chatMessageModel.insertMany(
+      Array.from({ length: 45 }, (_, index) => ({
+        gameId: game._id,
+        senderId: organizer._id,
+        content: `Older message ${index + 1}`
+      }))
+    );
+    const firstPage = await request(`/games/${game._id}/messages?limit=40`, {
+      token: tokenFor(participant._id)
+    });
+    assert.equal(firstPage.status, 200);
+    assert.equal(firstPage.body.messages.length, 40);
+    assert.equal(firstPage.body.hasMore, true);
+    const olderPage = await request(
+      `/games/${game._id}/messages?limit=40&before=${firstPage.body.messages[0]._id}`,
+      { token: tokenFor(participant._id) }
+    );
+    assert.equal(olderPage.status, 200);
+    assert.equal(olderPage.body.messages.length, 6);
+    assert.equal(olderPage.body.hasMore, false);
+
     const outsiderSocket = connectSocket(baseUrl.replace("/api/v1", ""), {
       auth: { token: tokenFor(outsider._id) },
       forceNew: true,
@@ -453,6 +474,29 @@ test("game chat persists messages and is restricted to joined players", async ()
     } finally {
       expiringSocket.disconnect();
     }
+
+    const accessRevoked = new Promise((resolve) => {
+      socket.once("game:access-revoked", resolve);
+    });
+    const leaveGame = await request(`/games/${game._id}/leave`, {
+      method: "DELETE",
+      token: tokenFor(participant._id)
+    });
+    assert.equal(leaveGame.status, 200);
+    assert.equal((await accessRevoked).gameId, game._id.toString());
+
+    const afterLeaveHistory = await request(`/games/${game._id}/messages`, {
+      token: tokenFor(participant._id)
+    });
+    assert.equal(afterLeaveHistory.status, 403);
+    const afterLeaveSend = await new Promise((resolve) => {
+      socket.emit(
+        "game:message",
+        { gameId: game._id.toString(), content: "I left this game" },
+        resolve
+      );
+    });
+    assert.equal(afterLeaveSend.ok, false);
 
     const cancellation = await request(`/bookings/${booking._id}`, {
       method: "DELETE",

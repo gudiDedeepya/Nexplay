@@ -7,6 +7,21 @@ function roomForGame(gameId) {
   return `game:${gameId}`;
 }
 
+let chatIo;
+
+export async function revokeGameChatAccess(gameId, userId) {
+  if (!chatIo) return;
+
+  const sockets = await chatIo.in(roomForGame(gameId)).fetchSockets();
+  const memberSockets = sockets.filter((socket) => socket.data.userId === userId);
+  await Promise.all(
+    memberSockets.map(async (socket) => {
+      socket.emit("game:access-revoked", { gameId });
+      await socket.leave(roomForGame(gameId));
+    })
+  );
+}
+
 export function attachChatServer(httpServer, allowedOrigins) {
   const io = new Server(httpServer, {
     cors: {
@@ -14,6 +29,7 @@ export function attachChatServer(httpServer, allowedOrigins) {
       credentials: true
     }
   });
+  chatIo = io;
 
   io.use(async (socket, next) => {
     let decoded;
@@ -82,6 +98,17 @@ export function attachChatServer(httpServer, allowedOrigins) {
         console.error("Could not join game chat:", error);
         return reply({ ok: false, message: "Unable to join game chat" });
       }
+    });
+
+    socket.on("game:leave", async (payload, acknowledge) => {
+      const reply = typeof acknowledge === "function" ? acknowledge : () => {};
+      const { gameId } = payload || {};
+      if (typeof gameId !== "string" || !/^[a-f\d]{24}$/i.test(gameId)) {
+        return reply({ ok: false, message: "Invalid game ID" });
+      }
+
+      await socket.leave(roomForGame(gameId));
+      return reply({ ok: true });
     });
 
     socket.on("game:message", async (payload, acknowledge) => {

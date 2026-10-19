@@ -1,15 +1,19 @@
 import api from "../services/api";
 import { useState } from "react";
 import GameChatModal from "./GameChatModal";
+import { useGameChat } from "../hooks/useGameChat";
 
 function GameCard({ game, refreshGames }) {
     const [chatOpen, setChatOpen] = useState(false);
+    const { unreadCounts, refreshMembership } = useGameChat();
+    const unreadCount = unreadCounts[game._id] || 0;
 
     async function handleJoin() {
 
         try {
 
             await api.post(`/games/${game._id}/join`);
+            await refreshMembership();
 
             alert("Joined Game Successfully!");
 
@@ -141,7 +145,14 @@ function GameCard({ game, refreshGames }) {
                         onClick={() => setChatOpen(true)}
                         className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
                     >
-                        Open Game Chat
+                        <span className="inline-flex items-center justify-center gap-2">
+                            Open Game Chat
+                            {unreadCount > 0 && (
+                                <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                                    {unreadCount > 99 ? "99+" : unreadCount}
+                                </span>
+                            )}
+                        </span>
                     </button>
                 ) : (
                     <button

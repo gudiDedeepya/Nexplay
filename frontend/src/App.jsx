@@ -11,12 +11,14 @@ import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Booking from "./pages/Booking";
 import AdminDashboard from "./pages/AdminDashboard";
+import { GameChatProvider } from "./context/GameChatContext.jsx";
 
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
+        <GameChatProvider>
+          <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
@@ -75,7 +77,8 @@ function App() {
           />
 
           <Route path="*" element={<NotFound />} />
-        </Routes>
+          </Routes>
+        </GameChatProvider>
       </BrowserRouter>
     </AuthProvider>
   );

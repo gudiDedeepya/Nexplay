@@ -1,8 +1,11 @@
 import { useState } from "react";
 import GameChatModal from "./GameChatModal";
+import { useGameChat } from "../hooks/useGameChat";
 
 function GameCardProfile({ game }) {
     const [chatOpen, setChatOpen] = useState(false);
+    const { unreadCounts } = useGameChat();
+    const unreadCount = unreadCounts[game._id] || 0;
     const booking = game.bookingId;
     const venue = booking?.venueId;
     const statusStyles = {
@@ -88,7 +91,14 @@ function GameCardProfile({ game }) {
                     onClick={() => setChatOpen(true)}
                     className="mt-5 w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
                 >
-                    Open Game Chat
+                    <span className="inline-flex items-center justify-center gap-2">
+                        Open Game Chat
+                        {unreadCount > 0 && (
+                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                        )}
+                    </span>
                 </button>
             </div>
             {chatOpen && (

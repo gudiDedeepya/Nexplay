@@ -1,10 +1,9 @@
-import { useContext, useEffect, useRef, useState } from "react";
-import { io } from "socket.io-client";
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AuthContext } from "../context/authContext";
+import { useGameChat } from "../hooks/useGameChat";
 import api from "../services/api";
 
-const apiBaseUrl = import.meta.env.VITE_API_URL || "https://nexplaybackend.onrender.com/api/v1";
-const socketUrl = new URL(apiBaseUrl).origin;
+const PAGE_SIZE = 40;
 
 function mergeMessages(current, incoming) {
     const messagesById = new Map(current.map((message) => [message._id, message]));
@@ -36,61 +35,146 @@ function getUserIdFromToken(token) {
 
 function GameChatModal({ game, onClose }) {
     const { token } = useContext(AuthContext);
+    const { socket, connectionStatus, markRead, setActiveGameId } = useGameChat();
     const [messages, setMessages] = useState([]);
     const currentUserId = getUserIdFromToken(token || "");
     const [content, setContent] = useState("");
-    const [chatReady, setChatReady] = useState(false);
+    const [chatJoined, setChatJoined] = useState(false);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
+    const [accessRevoked, setAccessRevoked] = useState(false);
     const [error, setError] = useState("");
-    const socketRef = useRef(null);
-    const messagesEndRef = useRef(null);
+    const messagesContainerRef = useRef(null);
+    const shouldScrollToBottomRef = useRef(true);
+    const preserveScrollRef = useRef(null);
+    const initialHistoryLoadedRef = useRef(false);
+    const chatReady = chatJoined && Boolean(socket?.connected);
+
+    const loadLatestMessages = useCallback(async () => {
+        setHistoryLoading(true);
+        try {
+            const response = await api.get(`/games/${game._id}/messages`, {
+                params: { limit: PAGE_SIZE }
+            });
+            setMessages((current) => mergeMessages(current, response.data.messages));
+            setHasMore(response.data.hasMore);
+            setError("");
+            if (!initialHistoryLoadedRef.current) {
+                shouldScrollToBottomRef.current = true;
+                initialHistoryLoadedRef.current = true;
+            }
+        } catch (requestError) {
+            setError(
+                requestError.response?.data?.message ||
+                "Could not load chat history."
+            );
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [game._id]);
 
     useEffect(() => {
-        const socket = io(socketUrl, { auth: { token } });
-        socketRef.current = socket;
+        setActiveGameId(game._id);
+        markRead(game._id);
+        return () => setActiveGameId(null);
+    }, [game._id, markRead, setActiveGameId]);
 
-        socket.on("connect", () => {
+    useEffect(() => {
+        if (!socket) return undefined;
+
+        let active = true;
+        const joinChat = () => {
+            setChatJoined(false);
             socket.emit("game:join", { gameId: game._id }, async (result) => {
+                if (!active) return;
                 if (!result?.ok) {
                     setError(result?.message || "Unable to join this game's chat.");
                     return;
                 }
-
-                setChatReady(true);
-                try {
-                    const response = await api.get(`/games/${game._id}/messages`);
-                    setMessages((current) => mergeMessages(current, response.data.messages));
-                    setError("");
-                } catch (requestError) {
-                    setError(
-                        requestError.response?.data?.message ||
-                        "Could not load chat history."
-                    );
-                }
+                setChatJoined(true);
+                setAccessRevoked(false);
+                await loadLatestMessages();
             });
-        });
-
-        socket.on("game:message", ({ message, clientMessageId }) => {
+        };
+        const handleMessage = ({ message, clientMessageId }) => {
+            if (message?.gameId?.toString() !== game._id) return;
+            const container = messagesContainerRef.current;
+            const nearBottom = !container ||
+                container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+            shouldScrollToBottomRef.current = nearBottom;
+            markRead(game._id);
             setMessages((current) =>
                 mergeMessages(current, [{ ...message, clientMessageId }])
             );
-        });
-        socket.on("connect_error", () => {
-            setChatReady(false);
-            setError("Could not connect to chat. Check your connection and try again.");
-        });
-        socket.on("disconnect", () => {
-            setChatReady(false);
-        });
+        };
+        const handleAccessRevoked = ({ gameId }) => {
+            if (gameId !== game._id) return;
+            setChatJoined(false);
+            setAccessRevoked(true);
+            setError("You no longer have access to this game's chat.");
+        };
+        const handleConnectError = () => {
+            setChatJoined(false);
+            setError("Could not connect to chat. Reconnecting...");
+        };
+        const handleDisconnect = () => setChatJoined(false);
+
+        socket.on("connect", joinChat);
+        socket.on("game:message", handleMessage);
+        socket.on("game:access-revoked", handleAccessRevoked);
+        socket.on("connect_error", handleConnectError);
+        socket.on("disconnect", handleDisconnect);
+        if (socket.connected) joinChat();
 
         return () => {
-            socket.disconnect();
-            socketRef.current = null;
+            active = false;
+            socket.off("connect", joinChat);
+            socket.off("game:message", handleMessage);
+            socket.off("game:access-revoked", handleAccessRevoked);
+            socket.off("connect_error", handleConnectError);
+            socket.off("disconnect", handleDisconnect);
         };
-    }, [game._id, token]);
+    }, [game._id, loadLatestMessages, markRead, socket]);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    useLayoutEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        if (preserveScrollRef.current) {
+            const { scrollHeight, scrollTop } = preserveScrollRef.current;
+            container.scrollTop = scrollTop + (container.scrollHeight - scrollHeight);
+            preserveScrollRef.current = null;
+        } else if (shouldScrollToBottomRef.current) {
+            container.scrollTop = container.scrollHeight;
+            shouldScrollToBottomRef.current = false;
+        }
     }, [messages]);
+
+    async function loadOlderMessages() {
+        const oldestMessage = messages[0];
+        if (!oldestMessage || historyLoading || !hasMore) return;
+
+        const container = messagesContainerRef.current;
+        preserveScrollRef.current = container
+            ? { scrollHeight: container.scrollHeight, scrollTop: container.scrollTop }
+            : null;
+        setHistoryLoading(true);
+        setError("");
+        try {
+            const response = await api.get(`/games/${game._id}/messages`, {
+                params: { before: oldestMessage._id, limit: PAGE_SIZE }
+            });
+            setMessages((current) => mergeMessages(current, response.data.messages));
+            setHasMore(response.data.hasMore);
+        } catch (requestError) {
+            preserveScrollRef.current = null;
+            setError(
+                requestError.response?.data?.message ||
+                "Could not load older messages."
+            );
+        } finally {
+            setHistoryLoading(false);
+        }
+    }
 
     function handleSubmit(event) {
         event.preventDefault();
@@ -98,10 +182,14 @@ function GameChatModal({ game, onClose }) {
         if (!trimmedContent || !chatReady) return;
 
         const clientMessageId = crypto.randomUUID();
+        const container = messagesContainerRef.current;
+        shouldScrollToBottomRef.current = !container ||
+            container.scrollHeight - container.scrollTop - container.clientHeight < 100;
         const optimisticMessage = {
             _id: `pending-${clientMessageId}`,
             clientMessageId,
-            senderId: { _id: currentUserId },
+            gameId: game._id,
+            senderId: { _id: currentUserId, name: "You" },
             content: trimmedContent,
             createdAt: new Date().toISOString()
         };
@@ -109,7 +197,7 @@ function GameChatModal({ game, onClose }) {
         setContent("");
         setError("");
 
-        socketRef.current.emit(
+        socket.emit(
             "game:message",
             { gameId: game._id, content: trimmedContent, clientMessageId },
             (result) => {
@@ -147,9 +235,13 @@ function GameChatModal({ game, onClose }) {
                             <h2 id="game-chat-title" className="truncate text-lg font-bold text-white">
                                 {game.title}
                             </h2>
-                            <p className="text-sm text-slate-400">
-                                {game.sport}
-                            </p>
+                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                                <span>{game.sport}</span>
+                                <span aria-hidden="true">·</span>
+                                <span className={chatReady ? "text-emerald-400" : "text-amber-300"}>
+                                    {chatReady ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting..." : "Connecting..."}
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <button
@@ -162,15 +254,28 @@ function GameChatModal({ game, onClose }) {
                     </button>
                 </header>
 
-                <div className="flex-1 space-y-3 overflow-y-auto bg-slate-950/80 px-3 py-5 sm:px-8">
-                    {messages.length === 0 && !error && (
+                <div ref={messagesContainerRef} className="flex-1 space-y-3 overflow-y-auto bg-slate-950/80 px-3 py-5 sm:px-8">
+                    {hasMore && !accessRevoked && (
+                        <div className="flex justify-center pb-2">
+                            <button
+                                type="button"
+                                onClick={loadOlderMessages}
+                                disabled={historyLoading}
+                                className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:border-blue-500 hover:text-white disabled:opacity-50"
+                            >
+                                {historyLoading ? "Loading older messages..." : "Load older messages"}
+                            </button>
+                        </div>
+                    )}
+                    {messages.length === 0 && chatReady && !error && (
                         <div className="mx-auto mt-10 max-w-sm rounded-2xl border border-slate-700 bg-slate-900/90 p-4 text-center text-sm text-slate-300 shadow">
                             Messages in this game chat are visible to joined players. Start the conversation!
                         </div>
                     )}
                     {messages.map((message) => {
                         const isOwnMessage =
-                            message.senderId?._id?.toString() === currentUserId;
+                            (message.senderId?._id || message.senderId)?.toString() === currentUserId;
+                        const sentAt = new Date(message.createdAt);
 
                         return (
                             <div
@@ -184,33 +289,39 @@ function GameChatModal({ game, onClose }) {
                                             : "rounded-bl-sm bg-slate-800 text-slate-100"
                                     }`}
                                 >
-                                    {!isOwnMessage && (
-                                        <p className="mb-1 text-xs font-semibold text-sky-300">
-                                            {message.senderId?.name || "Player"}
-                                        </p>
-                                    )}
+                                    <p className={`mb-1 text-xs font-semibold ${
+                                        isOwnMessage ? "text-blue-200" : "text-sky-300"
+                                    }`}>
+                                        {isOwnMessage ? "You" : message.senderId?.name || "Player"}
+                                    </p>
                                     <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
                                         <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
                                             {message.content}
                                         </p>
-                                        <time className={`ml-auto whitespace-nowrap text-[10px] ${
-                                            isOwnMessage ? "text-blue-200" : "text-slate-400"
-                                        }`}>
-                                            {new Date(message.createdAt).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit"
-                                            })}
+                                        <time
+                                            dateTime={sentAt.toISOString()}
+                                            title={sentAt.toLocaleString()}
+                                            className={`ml-auto whitespace-nowrap text-[10px] ${
+                                                isOwnMessage ? "text-blue-200" : "text-slate-400"
+                                            }`}
+                                        >
+                                            {sentAt.toLocaleDateString([], { month: "short", day: "numeric" })}{" "}
+                                            {sentAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                         </time>
                                     </div>
                                 </article>
                             </div>
                         );
                     })}
-                    <div ref={messagesEndRef} />
+                    {messages.length === 0 && historyLoading && (
+                        <p role="status" className="pt-8 text-center text-sm text-slate-500">
+                            Loading messages...
+                        </p>
+                    )}
                 </div>
 
                 {error && (
-                    <p role="alert" className="shrink-0 bg-slate-900 px-5 py-2 text-sm text-red-400">
+                    <p role="alert" className="shrink-0 bg-slate-900 px-5 py-2 text-sm text-red-300">
                         {error}
                     </p>
                 )}
@@ -220,14 +331,14 @@ function GameChatModal({ game, onClose }) {
                         value={content}
                         onChange={(event) => setContent(event.target.value)}
                         maxLength={1000}
-                        disabled={!chatReady}
+                        disabled={!chatReady || accessRevoked}
                         aria-label="Chat message"
-                        placeholder={chatReady ? "Write a message..." : "Connecting to chat..."}
+                        placeholder={accessRevoked ? "You no longer have chat access" : chatReady ? "Write a message..." : "Connecting to chat..."}
                         className="min-w-0 flex-1 rounded-full border border-slate-700 bg-slate-800 px-5 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     />
                     <button
                         type="submit"
-                        disabled={!chatReady || !content.trim()}
+                        disabled={!chatReady || accessRevoked || !content.trim()}
                         className="rounded-full bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         Send

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { auth, optionalAuth } from "../middlewares/authmiddleware.js";
 import { bookingModel, chatMessageModel, gameModel } from "../models/userschema.js";
 import { validateGameData } from "../utils/validators.js";
+import { revokeGameChatAccess } from "../realtime/chatServer.js";
 
 const router = express.Router();
 
@@ -84,6 +85,18 @@ router.get("/:gameId/messages", auth, async (req, res, next) => {
       return res.status(400).json({ message: "Invalid game ID" });
     }
 
+    const parsedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isNaN(parsedLimit) ? 40 : Math.max(1, Math.min(parsedLimit, 100));
+    let cursorFilter;
+    if (req.query.before !== undefined) {
+      if (
+        typeof req.query.before !== "string" ||
+        !mongoose.isValidObjectId(req.query.before)
+      ) {
+        return res.status(400).json({ message: "Invalid message cursor" });
+      }
+    }
+
     const game = await gameModel.findById(req.params.gameId).select("joinedPlayers");
     if (!game) {
       return res.status(404).json({ message: "Game not found" });
@@ -93,13 +106,29 @@ router.get("/:gameId/messages", auth, async (req, res, next) => {
       return res.status(403).json({ message: "Join this game to view its chat" });
     }
 
-    const messages = await chatMessageModel
-      .find({ gameId: game._id })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .populate("senderId", "name");
+    const filter = { gameId: game._id };
+    if (req.query.before) {
+      const cursorMessage = await chatMessageModel
+        .findOne({ _id: req.query.before, gameId: game._id })
+        .select("_id createdAt");
+      if (!cursorMessage) {
+        return res.status(400).json({ message: "Invalid message cursor" });
+      }
+      filter.$or = [
+        { createdAt: { $lt: cursorMessage.createdAt } },
+        { createdAt: cursorMessage.createdAt, _id: { $lt: cursorMessage._id } }
+      ];
+    }
 
-    return res.status(200).json({ messages: messages.reverse() });
+    const page = await chatMessageModel
+      .find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .populate("senderId", "name");
+    const hasMore = page.length > limit;
+    const messages = page.slice(0, limit).reverse();
+
+    return res.status(200).json({ messages, hasMore });
   } catch (error) {
     next(error);
   }
@@ -229,6 +258,7 @@ router.delete("/:gameId/leave", auth, async (req, res, next) => {
       return res.status(400).json({ message: "You have not joined this game" });
     }
 
+    await revokeGameChatAccess(gameId.toString(), playerId.toString());
     return res.status(200).json({ message: "Left game successfully" });
   } catch (error) {
     next(error);
