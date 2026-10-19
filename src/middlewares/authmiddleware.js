@@ -20,6 +20,26 @@ export function auth(req, res, next) {
   }
 }
 
+export function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(authHeader.split(" ")[1], getJwtSecret());
+    req.userId = decoded.userId;
+    return next();
+  } catch (error) {
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return next();
+    }
+
+    return next(error);
+  }
+}
+
 export async function requireAdmin(req, res, next) {
   try {
     const user = await userModel.findById(req.userId).select("role");

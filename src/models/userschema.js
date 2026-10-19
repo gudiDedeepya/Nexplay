@@ -66,6 +66,16 @@ const bookingSchema = new Schema(
   { timestamps: true, autoIndex: false }
 );
 
+const chatMessageSchema = new Schema(
+  {
+    gameId: { type: Schema.Types.ObjectId, ref: "Game", required: true },
+    senderId: { type: Schema.Types.ObjectId, ref: "user", required: true },
+    content: { type: String, required: true, trim: true, maxlength: 1000 }
+  },
+  { timestamps: true }
+);
+chatMessageSchema.index({ gameId: 1, createdAt: -1 });
+
 bookingSchema.index(
   { venueId: 1, bookingDate: 1, slot: 1 },
   {
@@ -78,3 +88,4 @@ export const bookingModel = model("Booking", bookingSchema);
 export const gameModel = model("Game", gameSchema);
 export const venueModel = model("Venue", venueSchema);
 export const userModel = model("user", userSchema);
+export const chatMessageModel = model("ChatMessage", chatMessageSchema);

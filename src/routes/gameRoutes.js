@@ -1,7 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
-import { auth } from "../middlewares/authmiddleware.js";
-import { bookingModel, gameModel } from "../models/userschema.js";
+import { auth, optionalAuth } from "../middlewares/authmiddleware.js";
+import { bookingModel, chatMessageModel, gameModel } from "../models/userschema.js";
 import { validateGameData } from "../utils/validators.js";
 
 const router = express.Router();
@@ -51,7 +51,7 @@ router.post("/", auth, async (req, res, next) => {
   }
 });
 
-router.get("/", async (req, res, next) => {
+router.get("/", optionalAuth, async (req, res, next) => {
   try {
     const games = await gameModel
       .find({ status: "Open" })
@@ -63,7 +63,43 @@ router.get("/", async (req, res, next) => {
         }
       });
 
-    return res.status(200).json({ games });
+    const gamesWithMembership = games.map((game) => {
+      const gameData = game.toObject();
+      gameData.joinedByMe = Boolean(
+        req.userId &&
+        game.joinedPlayers.some((playerId) => playerId.toString() === req.userId)
+      );
+      return gameData;
+    });
+
+    return res.status(200).json({ games: gamesWithMembership });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/:gameId/messages", auth, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.gameId)) {
+      return res.status(400).json({ message: "Invalid game ID" });
+    }
+
+    const game = await gameModel.findById(req.params.gameId).select("joinedPlayers");
+    if (!game) {
+      return res.status(404).json({ message: "Game not found" });
+    }
+
+    if (!game.joinedPlayers.some((playerId) => playerId.toString() === req.userId)) {
+      return res.status(403).json({ message: "Join this game to view its chat" });
+    }
+
+    const messages = await chatMessageModel
+      .find({ gameId: game._id })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .populate("senderId", "name");
+
+    return res.status(200).json({ messages: messages.reverse() });
   } catch (error) {
     next(error);
   }

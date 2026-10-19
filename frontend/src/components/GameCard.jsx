@@ -1,6 +1,9 @@
 import api from "../services/api";
+import { useState } from "react";
+import GameChatModal from "./GameChatModal";
 
 function GameCard({ game, refreshGames }) {
+    const [chatOpen, setChatOpen] = useState(false);
 
     async function handleJoin() {
 
@@ -131,17 +134,28 @@ function GameCard({ game, refreshGames }) {
 
             }
 
-            <button
-
-                onClick={handleJoin}
-
-                className="w-full mt-8 bg-blue-600 hover:bg-blue-700 rounded-xl py-3 font-semibold text-white transition"
-
-            >
-
-                Join Game
-
-            </button>
+            <div className="mt-8 flex gap-3">
+                {game.joinedByMe ? (
+                    <button
+                        type="button"
+                        onClick={() => setChatOpen(true)}
+                        className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
+                    >
+                        Open Game Chat
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={handleJoin}
+                        className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
+                    >
+                        Join Game
+                    </button>
+                )}
+            </div>
+            {chatOpen && (
+                <GameChatModal game={game} onClose={() => setChatOpen(false)} />
+            )}
 
         </div>
 

@@ -1,4 +1,8 @@
+import { useState } from "react";
+import GameChatModal from "./GameChatModal";
+
 function GameCardProfile({ game }) {
+    const [chatOpen, setChatOpen] = useState(false);
     const booking = game.bookingId;
     const venue = booking?.venueId;
     const statusStyles = {
@@ -79,7 +83,17 @@ function GameCardProfile({ game }) {
                     <span>{game.skillLevel || "Beginner"} level</span>
                     <span>{game.joinedPlayers?.length || 0} players</span>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => setChatOpen(true)}
+                    className="mt-5 w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
+                >
+                    Open Game Chat
+                </button>
             </div>
+            {chatOpen && (
+                <GameChatModal game={game} onClose={() => setChatOpen(false)} />
+            )}
         </article>
     );
 }

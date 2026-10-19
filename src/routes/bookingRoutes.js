@@ -1,6 +1,11 @@
 import express from "express";
 import { auth } from "../middlewares/authmiddleware.js";
-import { bookingModel, gameModel, venueModel } from "../models/userschema.js";
+import {
+  bookingModel,
+  chatMessageModel,
+  gameModel,
+  venueModel
+} from "../models/userschema.js";
 import { validateBookingData } from "../utils/validators.js";
 
 const router = express.Router();
@@ -114,7 +119,10 @@ router.delete("/:bookingId", auth, async (req, res, next) => {
 
     booking.status = "Cancelled";
     await booking.save();
-    await gameModel.deleteOne({ bookingId: booking._id });
+    const game = await gameModel.findOneAndDelete({ bookingId: booking._id });
+    if (game) {
+      await chatMessageModel.deleteMany({ gameId: game._id });
+    }
 
     return res.status(200).json({ message: "Booking cancelled" });
   } catch (error) {

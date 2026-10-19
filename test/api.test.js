@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { createServer } from "node:http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
+import { io as connectSocket } from "socket.io-client";
 import {
   bookingModel,
+  chatMessageModel,
   gameModel,
   userModel,
   venueModel
 } from "../src/models/userschema.js";
 import { validateRuntimeConfig } from "../src/config/security.js";
+import { attachChatServer } from "../src/realtime/chatServer.js";
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "nexplay-test-secret-with-sufficient-length";
@@ -58,11 +62,14 @@ before(async () => {
     userModel.syncIndexes(),
     venueModel.syncIndexes(),
     bookingModel.syncIndexes(),
-    gameModel.syncIndexes()
+    gameModel.syncIndexes(),
+    chatMessageModel.syncIndexes()
   ]);
 
-  const { default: app } = await import("../src/app.js");
-  server = app.listen(0);
+  const { default: app, allowedOrigins } = await import("../src/app.js");
+  server = createServer(app);
+  attachChatServer(server, allowedOrigins);
+  server.listen(0);
   await new Promise((resolve, reject) => {
     server.once("listening", resolve);
     server.once("error", reject);
@@ -240,6 +247,111 @@ test("concurrent game joins respect capacity and leaving reopens a full game", a
   const reopenedGame = await gameModel.findById(game._id);
   assert.equal(reopenedGame.joinedPlayers.length, 1);
   assert.equal(reopenedGame.status, "Open");
+});
+
+test("game chat persists messages and is restricted to joined players", async () => {
+  const organizer = await createUser(`chat-organizer-${randomUUID()}@example.test`);
+  const participant = await createUser(`chat-player-${randomUUID()}@example.test`);
+  const outsider = await createUser(`chat-outsider-${randomUUID()}@example.test`);
+  const venue = await venueModel.create({
+    name: "Chat Test Venue",
+    sport: "Football",
+    location: "Test city",
+    pricePerHour: 700
+  });
+  const booking = await bookingModel.create({
+    userId: organizer._id,
+    venueId: venue._id,
+    bookingDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    slot: "18:00-19:00"
+  });
+  const game = await gameModel.create({
+    title: "Chat Test",
+    sport: "Football",
+    bookingId: booking._id,
+    organizerId: organizer._id,
+    maxPlayers: 3,
+    joinedPlayers: [organizer._id, participant._id],
+    status: "Open"
+  });
+
+  const forbiddenHistory = await request(`/games/${game._id}/messages`, {
+    token: tokenFor(outsider._id)
+  });
+  assert.equal(forbiddenHistory.status, 403);
+  const listedGames = await request("/games", { token: tokenFor(participant._id) });
+  assert.equal(
+    listedGames.body.games.find((listedGame) => listedGame._id === game._id.toString()).joinedByMe,
+    true
+  );
+
+  const socket = connectSocket(baseUrl.replace("/api/v1", ""), {
+    auth: { token: tokenFor(participant._id) },
+    forceNew: true,
+    reconnection: false
+  });
+
+  try {
+    await new Promise((resolve, reject) => {
+      socket.once("connect", resolve);
+      socket.once("connect_error", reject);
+    });
+
+    const joined = await new Promise((resolve) => {
+      socket.emit("game:join", { gameId: game._id.toString() }, resolve);
+    });
+    assert.equal(joined.ok, true);
+
+    const receivedMessage = new Promise((resolve) => {
+      socket.once("game:message", resolve);
+    });
+    const sent = await new Promise((resolve) => {
+      socket.emit(
+        "game:message",
+        { gameId: game._id.toString(), content: "See you at the match!" },
+        resolve
+      );
+    });
+    assert.equal(sent.ok, true);
+
+    const broadcast = await receivedMessage;
+    assert.equal(broadcast.message.content, "See you at the match!");
+
+    const history = await request(`/games/${game._id}/messages`, {
+      token: tokenFor(participant._id)
+    });
+    assert.equal(history.status, 200);
+    assert.equal(history.body.messages.length, 1);
+    assert.equal(history.body.messages[0].senderId.name, "Test Player");
+    assert.equal(await chatMessageModel.countDocuments({ gameId: game._id }), 1);
+
+    const outsiderSocket = connectSocket(baseUrl.replace("/api/v1", ""), {
+      auth: { token: tokenFor(outsider._id) },
+      forceNew: true,
+      reconnection: false
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        outsiderSocket.once("connect", resolve);
+        outsiderSocket.once("connect_error", reject);
+      });
+      const outsiderJoin = await new Promise((resolve) => {
+        outsiderSocket.emit("game:join", { gameId: game._id.toString() }, resolve);
+      });
+      assert.equal(outsiderJoin.ok, false);
+    } finally {
+      outsiderSocket.disconnect();
+    }
+
+    const cancellation = await request(`/bookings/${booking._id}`, {
+      method: "DELETE",
+      token: tokenFor(organizer._id)
+    });
+    assert.equal(cancellation.status, 200);
+    assert.equal(await chatMessageModel.countDocuments({ gameId: game._id }), 0);
+  } finally {
+    socket.disconnect();
+  }
 });
 
 test("production configuration rejects missing or weak secrets and missing service URLs", () => {
