@@ -11,18 +11,31 @@ import VenueCard from "../components/VenueCard";
 function Venues() {
 
     const [venues, setVenues] = useState([]);
+    const [requestState, setRequestState] = useState({
+        key: null,
+        status: "loading",
+        error: ""
+    });
+    const [retryCount, setRetryCount] = useState(0);
 
     const [searchParams] = useSearchParams();//reads the query params from the url 
 
     const navigate = useNavigate();
 
     const sport = searchParams.get("sport");
+    const requestKey = `${sport || ""}:${retryCount}`;
 
-    const [selectedSport, setSelectedSport] = useState(
-        sport || ""
-    );
+    const [sportSelection, setSportSelection] = useState({
+        routeSport: sport,
+        value: sport || ""
+    });
+    const selectedSport = sportSelection.routeSport === sport
+        ? sportSelection.value
+        : sport || "";
 
     useEffect(() => {
+        let active = true;
+
         async function loadVenues() {
             try {
                 let url = "/venues";
@@ -32,14 +45,31 @@ function Venues() {
                 }
 
                 const response = await api.get(url);
-                setVenues(response.data.venues);
+                if (active) {
+                    setVenues(response.data.venues);
+                    setRequestState({ key: requestKey, status: "loaded", error: "" });
+                }
             } catch (error) {
-                console.log(error);
+                if (active) {
+                    setRequestState({
+                        key: requestKey,
+                        status: "error",
+                        error: error.response?.data?.message ||
+                            "Unable to load venues. Check your connection and try again."
+                    });
+                }
             }
         }
 
         loadVenues();
-    }, [sport]);
+
+        return () => {
+            active = false;
+        };
+    }, [sport, requestKey]);
+
+    const loading = requestState.key !== requestKey || requestState.status === "loading";
+    const error = requestState.key === requestKey ? requestState.error : "";
 
     function handleSearch() {
 
@@ -51,7 +81,7 @@ function Venues() {
 
         else {
 
-            navigate(`/venues?sport=${selectedSport}`);
+            navigate(`/venues?sport=${encodeURIComponent(selectedSport)}`);
 
         }
 
@@ -88,7 +118,10 @@ function Venues() {
                         value={selectedSport}
 
                         onChange={(e) =>
-                            setSelectedSport(e.target.value)
+                            setSportSelection({
+                                routeSport: sport,
+                                value: e.target.value
+                            })
                         }
 
                         className="bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl"
@@ -122,7 +155,26 @@ function Venues() {
 
                     {
 
-                        venues.length > 0 ? (
+                        loading ? (
+
+                            <div role="status" className="col-span-full text-center text-gray-400 text-xl">
+                                Loading venues...
+                            </div>
+
+                        ) : error ? (
+
+                            <div className="col-span-full text-center">
+                                <p role="alert" className="text-red-400 text-lg">{error}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setRetryCount((count) => count + 1)}
+                                    className="mt-4 rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+                                >
+                                    Try again
+                                </button>
+                            </div>
+
+                        ) : venues.length > 0 ? (
 
                             venues.map((venue) => (
 

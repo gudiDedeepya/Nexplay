@@ -77,13 +77,20 @@ export function attachChatServer(httpServer, allowedOrigins) {
       const reply = typeof acknowledge === "function" ? acknowledge : () => {};
 
       try {
-        const { gameId, content } = payload || {};
+        const { gameId, content, clientMessageId } = payload || {};
         if (typeof gameId !== "string" || !/^[a-f\d]{24}$/i.test(gameId)) {
           return reply({ ok: false, message: "Invalid game ID" });
         }
 
         if (typeof content !== "string" || !content.trim() || content.trim().length > 1000) {
           return reply({ ok: false, message: "Message must be between 1 and 1000 characters" });
+        }
+
+        if (
+          clientMessageId !== undefined &&
+          (typeof clientMessageId !== "string" || clientMessageId.length > 100)
+        ) {
+          return reply({ ok: false, message: "Invalid message identifier" });
         }
 
         const game = await gameModel.findOne({
@@ -109,10 +116,10 @@ export function attachChatServer(httpServer, allowedOrigins) {
           .map((connectedSocket) => connectedSocket.id);
 
         if (eligibleSockets.length > 0) {
-          io.to(eligibleSockets).emit("game:message", { message });
+          io.to(eligibleSockets).emit("game:message", { message, clientMessageId });
         }
 
-        return reply({ ok: true });
+        return reply({ ok: true, message: message.toObject() });
       } catch (error) {
         console.error("Could not send game chat message:", error);
         return reply({ ok: false, message: "Unable to send message" });

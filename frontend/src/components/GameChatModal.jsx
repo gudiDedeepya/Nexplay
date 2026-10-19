@@ -8,43 +8,47 @@ const socketUrl = new URL(apiBaseUrl).origin;
 
 function mergeMessages(current, incoming) {
     const messagesById = new Map(current.map((message) => [message._id, message]));
-    incoming.forEach((message) => messagesById.set(message._id, message));
+    incoming.forEach((message) => {
+        for (const [messageId, existingMessage] of messagesById) {
+            if (
+                message.clientMessageId &&
+                existingMessage.clientMessageId === message.clientMessageId
+            ) {
+                messagesById.delete(messageId);
+            }
+        }
+        messagesById.set(message._id, message);
+    });
     return [...messagesById.values()].sort(
         (left, right) => new Date(left.createdAt) - new Date(right.createdAt)
     );
 }
 
+function getUserIdFromToken(token) {
+    try {
+        const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = JSON.parse(atob(payload));
+        return typeof decoded.userId === "string" ? decoded.userId : "";
+    } catch {
+        return "";
+    }
+}
+
 function GameChatModal({ game, onClose }) {
     const { token } = useContext(AuthContext);
     const [messages, setMessages] = useState([]);
-    const [currentUserId, setCurrentUserId] = useState("");
+    const currentUserId = getUserIdFromToken(token || "");
     const [content, setContent] = useState("");
-    const [connected, setConnected] = useState(false);
     const [chatReady, setChatReady] = useState(false);
     const [error, setError] = useState("");
     const socketRef = useRef(null);
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        let active = true;
         const socket = io(socketUrl, { auth: { token } });
         socketRef.current = socket;
 
-        api.get("/me")
-            .then((response) => {
-                if (active) setCurrentUserId(response.data.user._id);
-            })
-            .catch((requestError) => {
-                if (active) {
-                    setError(
-                        requestError.response?.data?.message ||
-                        "Could not load your account details."
-                    );
-                }
-            });
-
         socket.on("connect", () => {
-            setConnected(true);
             socket.emit("game:join", { gameId: game._id }, async (result) => {
                 if (!result?.ok) {
                     setError(result?.message || "Unable to join this game's chat.");
@@ -65,20 +69,20 @@ function GameChatModal({ game, onClose }) {
             });
         });
 
-        socket.on("game:message", ({ message }) => {
-            setMessages((current) => mergeMessages(current, [message]));
+        socket.on("game:message", ({ message, clientMessageId }) => {
+            setMessages((current) =>
+                mergeMessages(current, [{ ...message, clientMessageId }])
+            );
         });
         socket.on("connect_error", () => {
-            setConnected(false);
+            setChatReady(false);
             setError("Could not connect to chat. Check your connection and try again.");
         });
         socket.on("disconnect", () => {
-            setConnected(false);
             setChatReady(false);
         });
 
         return () => {
-            active = false;
             socket.disconnect();
             socketRef.current = null;
         };
@@ -93,17 +97,35 @@ function GameChatModal({ game, onClose }) {
         const trimmedContent = content.trim();
         if (!trimmedContent || !chatReady) return;
 
+        const clientMessageId = crypto.randomUUID();
+        const optimisticMessage = {
+            _id: `pending-${clientMessageId}`,
+            clientMessageId,
+            senderId: { _id: currentUserId },
+            content: trimmedContent,
+            createdAt: new Date().toISOString()
+        };
+        setMessages((current) => mergeMessages(current, [optimisticMessage]));
+        setContent("");
+        setError("");
+
         socketRef.current.emit(
             "game:message",
-            { gameId: game._id, content: trimmedContent },
+            { gameId: game._id, content: trimmedContent, clientMessageId },
             (result) => {
                 if (!result?.ok) {
+                    setMessages((current) =>
+                        current.filter((message) => message.clientMessageId !== clientMessageId)
+                    );
                     setError(result?.message || "Message could not be sent.");
                     return;
                 }
 
-                setContent("");
-                setError("");
+                if (result.message) {
+                    setMessages((current) =>
+                        mergeMessages(current, [{ ...result.message, clientMessageId }])
+                    );
+                }
             }
         );
     }
@@ -126,7 +148,7 @@ function GameChatModal({ game, onClose }) {
                                 {game.title}
                             </h2>
                             <p className="text-sm text-slate-400">
-                                {game.sport} · {connected ? "Online" : "Connecting..."}
+                                {game.sport}
                             </p>
                         </div>
                     </div>

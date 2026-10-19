@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
@@ -14,6 +14,9 @@ function Booking() {
     const [slots, setSlots] = useState([]);
     const [selectedSlot, setSelectedSlot] = useState("");
     const [dateSelected, setDateSelected] = useState(false);
+    const [slotsLoading, setSlotsLoading] = useState(false);
+    const [slotsError, setSlotsError] = useState("");
+    const slotsRequestId = useRef(0);
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -35,28 +38,30 @@ function Booking() {
     }, [venueId]);
 
     async function fetchAvailableSlots(selectedDate) {
-
+        const requestId = ++slotsRequestId.current;
+        setSlots([]);
+        setSelectedSlot("");
+        setSlotsError("");
+        setSlotsLoading(true);
         try {
-
             const response = await api.get(
                 `/venues/${venueId}/slots?date=${selectedDate}`
             );
 
-            setSlots(response.data.availableSlots);
-
-            setSelectedSlot("");
-
+            if (requestId === slotsRequestId.current) {
+                setSlots(response.data.availableSlots);
+            }
         } catch (error) {
-
-            console.log(error);
-
-            alert(
-                error.response?.data?.message ||
-                "Unable to fetch slots"
-            );
-
+            if (requestId === slotsRequestId.current) {
+                setSlotsError(
+                    error.response?.data?.message || "Unable to fetch available slots."
+                );
+            }
+        } finally {
+            if (requestId === slotsRequestId.current) {
+                setSlotsLoading(false);
+            }
         }
-
     }
 
     async function handleBooking() {
@@ -137,13 +142,18 @@ function Booking() {
                         max={maxBookingDate}
 
                         onChange={(e) => {
-
-                            setDate(e.target.value);
-
-                            setDateSelected(true);
-
-                            fetchAvailableSlots(e.target.value);
-
+                            const selectedDate = e.target.value;
+                            setDate(selectedDate);
+                            setDateSelected(Boolean(selectedDate));
+                            setSelectedSlot("");
+                            if (selectedDate) {
+                                fetchAvailableSlots(selectedDate);
+                            } else {
+                                slotsRequestId.current += 1;
+                                setSlots([]);
+                                setSlotsLoading(false);
+                                setSlotsError("");
+                            }
                         }}
 
                         className="bg-slate-900 border border-slate-700 rounded-lg p-3"
@@ -169,6 +179,25 @@ function Booking() {
                                 Select a date to view available slots.
 
                             </p>
+
+                        ) : slotsLoading ? (
+
+                            <p role="status" className="text-gray-400">
+                                Checking available slots...
+                            </p>
+
+                        ) : slotsError ? (
+
+                            <div className="text-red-400">
+                                <p>{slotsError}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchAvailableSlots(date)}
+                                    className="mt-2 text-sm text-blue-300 underline hover:text-blue-200"
+                                >
+                                    Try again
+                                </button>
+                            </div>
 
                         ) : slots.length === 0 ? (
 
