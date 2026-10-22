@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { getJwtSecret } from "../config/security.js";
-import { userModel } from "../models/userschema.js";
+import { userModel } from "../models/user.js";
 
 export function auth(req, res, next) {
   const authHeader = req.headers.authorization;

@@ -10,6 +10,9 @@ function Booking() {
     const navigate = useNavigate();
 
     const [venue, setVenue] = useState(null);
+    const [venueLoading, setVenueLoading] = useState(true);
+    const [venueError, setVenueError] = useState("");
+    const [venueRetryCount, setVenueRetryCount] = useState(0);
 
     const [date, setDate] = useState("");
     const [slots, setSlots] = useState([]);
@@ -26,16 +29,23 @@ function Booking() {
 
     useEffect(() => {
         async function loadVenue() {
+            setVenueLoading(true);
+            setVenueError("");
             try {
                 const response = await api.get(`/venues/${venueId}`);
                 setVenue(response.data.venue);
             } catch (error) {
-                console.log(error);
+                setVenueError(
+                    error.response?.data?.message ||
+                    "Unable to load venue details. Check your connection and try again."
+                );
+            } finally {
+                setVenueLoading(false);
             }
         }
 
         loadVenue();
-    }, [venueId]);
+    }, [venueId, venueRetryCount]);
 
     async function fetchAvailableSlots(selectedDate) {
         const requestId = ++slotsRequestId.current;
@@ -108,9 +118,22 @@ function Booking() {
 
                 </h1>
 
-                <p className="text-gray-400 mt-2 text-xl">
-                    {venue ? venue.name : "Loading Venue..."}
-                </p>
+                {venueLoading ? (
+                    <p role="status" className="mt-2 text-gray-400">Loading venue...</p>
+                ) : venueError ? (
+                    <div className="mt-3 text-red-300">
+                        <p role="alert">{venueError}</p>
+                        <button
+                            type="button"
+                            onClick={() => setVenueRetryCount((count) => count + 1)}
+                            className="mt-2 text-sm underline"
+                        >
+                            Try again
+                        </button>
+                    </div>
+                ) : (
+                    <p className="text-gray-400 mt-2 text-xl">{venue?.name}</p>
+                )}
                 {venue && (
                     <p className="mt-2 text-sm text-slate-400">
                         ₹{venue.pricePerHour} per hour · All booking times shown in Asia/Kolkata
@@ -134,6 +157,8 @@ function Booking() {
                         min={today}
 
                         max={maxBookingDate}
+
+                        disabled={!venue || venueLoading || Boolean(venueError)}
 
                         onChange={(e) => {
                             const selectedDate = e.target.value;
@@ -267,7 +292,7 @@ function Booking() {
 
                 <button
                     onClick={handleBooking}
-                    disabled={bookingLoading || slotsLoading || !selectedSlot}
+                    disabled={bookingLoading || slotsLoading || !venue || venueLoading || Boolean(venueError) || !selectedSlot}
                     className="mt-10 rounded-xl bg-blue-600 px-8 py-4 font-semibold transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {bookingLoading ? "Confirming booking..." : "Confirm booking"}

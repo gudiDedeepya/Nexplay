@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
-import { formatBookingDate } from "../utils/bookingDates";
+import AdminOverview from "../components/admin/AdminOverview";
+import AdminVenuesSection from "../components/admin/AdminVenuesSection";
+import AdminBookingsSection from "../components/admin/AdminBookingsSection";
+import AdminGamesSection from "../components/admin/AdminGamesSection";
 
 const emptyVenue = {
   name: "",
@@ -16,17 +19,13 @@ const emptyVenue = {
 
 const tabs = ["Overview", "Venues", "Bookings", "Games"];
 
-function fetchAdminDashboardData() {
+function fetchAdminDashboardData(venuePage, bookingPage, gamePage) {
   return Promise.all([
     api.get("/admin/dashboard"),
-    api.get("/admin/venues"),
-    api.get("/admin/bookings"),
-    api.get("/admin/games")
+    api.get("/admin/venues", { params: { page: venuePage } }),
+    api.get("/admin/bookings", { params: { page: bookingPage } }),
+    api.get("/admin/games", { params: { page: gamePage } })
   ]);
-}
-
-function formatDate(date) {
-  return formatBookingDate(date);
 }
 
 function AdminDashboard() {
@@ -34,8 +33,14 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [metrics, setMetrics] = useState(null);
   const [venues, setVenues] = useState([]);
+  const [venuesPagination, setVenuesPagination] = useState(null);
+  const [venuePage, setVenuePage] = useState(1);
   const [bookings, setBookings] = useState([]);
+  const [bookingsPagination, setBookingsPagination] = useState(null);
+  const [bookingPage, setBookingPage] = useState(1);
   const [games, setGames] = useState([]);
+  const [gamesPagination, setGamesPagination] = useState(null);
+  const [gamePage, setGamePage] = useState(1);
   const [form, setForm] = useState(emptyVenue);
   const [editingVenueId, setEditingVenueId] = useState(null);
   const [venueFormOpen, setVenueFormOpen] = useState(false);
@@ -49,15 +54,18 @@ function AdminDashboard() {
   const updateDashboardData = useCallback(([dashboardResult, venuesResult, bookingsResult, gamesResult]) => {
     setMetrics(dashboardResult.data.metrics);
     setVenues(venuesResult.data.venues);
+    setVenuesPagination(venuesResult.data.pagination);
     setBookings(bookingsResult.data.bookings);
+    setBookingsPagination(bookingsResult.data.pagination);
     setGames(gamesResult.data.games);
+    setGamesPagination(gamesResult.data.pagination);
   }, []);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      updateDashboardData(await fetchAdminDashboardData());
+      updateDashboardData(await fetchAdminDashboardData(venuePage, bookingPage, gamePage));
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
@@ -66,14 +74,14 @@ function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [updateDashboardData]);
+  }, [bookingPage, gamePage, updateDashboardData, venuePage]);
 
   useEffect(() => {
     let active = true;
 
     async function loadInitialDashboard() {
       try {
-        const results = await fetchAdminDashboardData();
+        const results = await fetchAdminDashboardData(venuePage, bookingPage, gamePage);
         if (active) updateDashboardData(results);
       } catch (requestError) {
         if (active) {
@@ -91,7 +99,7 @@ function AdminDashboard() {
     return () => {
       active = false;
     };
-  }, [updateDashboardData]);
+  }, [bookingPage, gamePage, updateDashboardData, venuePage]);
 
   function updateForm(event) {
     const { name, value } = event.target;
@@ -262,202 +270,38 @@ function AdminDashboard() {
         </nav>
 
         {activeTab === "Overview" && (
-          <section className="mt-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ["Active venues", metrics?.venueCount],
-                ["All bookings", metrics?.totalBookings],
-                ["Active bookings", metrics?.activeBookings],
-                ["Cancelled bookings", metrics?.cancelledBookings],
-                ["Community games", metrics?.gameCount]
-              ].map(([label, value]) => (
-                <article key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                  <p className="text-sm text-slate-400">{label}</p>
-                  <p className="mt-3 text-3xl font-bold">{value ?? "—"}</p>
-                </article>
-              ))}
-            </div>
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <h2 className="text-lg font-semibold">Popular sports by active bookings</h2>
-              {metrics?.popularSports?.length ? (
-                <ul className="mt-4 flex flex-wrap gap-3">
-                  {metrics.popularSports.map(({ sport, bookings: count }) => (
-                    <li key={sport} className="rounded-xl bg-slate-800 px-4 py-3 text-sm">
-                      <span className="font-semibold">{sport}</span>
-                      <span className="ml-2 text-slate-400">{count} bookings</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-3 text-sm text-slate-400">No active bookings yet.</p>
-              )}
-              <p className="mt-5 border-t border-slate-800 pt-4 text-xs text-slate-500">
-                Revenue is not tracked because the platform does not process payments.
-              </p>
-            </div>
-          </section>
+          <AdminOverview metrics={metrics} />
         )}
 
         {activeTab === "Venues" && (
-          <section className="mt-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold">Venue listings</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Update venue details or remove a venue from public listings.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setForm(emptyVenue);
-                  setEditingVenueId(null);
-                  setVenueFormOpen(true);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-950/30 transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                <span aria-hidden="true" className="text-lg leading-none">+</span>
-                Add venue
-              </button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {venues.map((venue) => (
-                <article
-                  key={venue._id}
-                  className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg shadow-black/10 transition hover:border-slate-700"
-                >
-                  <div className="flex items-start justify-between gap-4 p-5">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-lg font-semibold text-white">{venue.name}</h3>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                            venue.active === false
-                              ? "bg-slate-800 text-slate-400"
-                              : "bg-emerald-500/10 text-emerald-300"
-                          }`}
-                        >
-                          {venue.active === false ? "Inactive" : "Active"}
-                        </span>
-                      </div>
-                      <p className="mt-2 truncate text-sm text-slate-400">{venue.location}</p>
-                    </div>
-                    <span className="shrink-0 rounded-xl bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300">
-                      {venue.sport}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 border-y border-slate-800 px-5 py-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Price / hour</p>
-                      <p className="mt-1 font-semibold text-slate-100">{venue.pricePerHour}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Hours</p>
-                      <p className="mt-1 font-semibold text-slate-100">
-                        {venue.operatingHours?.open || "16:00"}–{venue.operatingHours?.close || "21:00"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 p-4">
-                    <button
-                      type="button"
-                      onClick={() => startEditing(venue)}
-                      className="flex-1 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-sm font-semibold text-blue-200 transition hover:border-blue-400/60 hover:bg-blue-500/20 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    >
-                      Edit venue
-                    </button>
-                    {venue.active !== false && (
-                      <button
-                        type="button"
-                        onClick={() => setVenueToRemove(venue)}
-                        className="flex-1 rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2.5 text-sm font-semibold text-red-300 transition hover:border-red-400/50 hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-300"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-              {!venues.length && (
-                <div className="col-span-full rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-6 py-12 text-center">
-                  <h3 className="text-lg font-semibold">No venues yet</h3>
-                  <p className="mt-2 text-sm text-slate-400">Add your first venue to make it available to players.</p>
-                  <button
-                    type="button"
-                    onClick={() => setVenueFormOpen(true)}
-                    className="mt-5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold hover:bg-blue-500"
-                  >
-                    Add your first venue
-                  </button>
-                </div>
-              )}
-            </div>
-          </section>
+          <AdminVenuesSection
+            venues={venues}
+            pagination={venuesPagination}
+            onPageChange={setVenuePage}
+            emptyVenue={emptyVenue}
+            setForm={setForm}
+            setEditingVenueId={setEditingVenueId}
+            setVenueFormOpen={setVenueFormOpen}
+            startEditing={startEditing}
+            setVenueToRemove={setVenueToRemove}
+          />
         )}
 
         {activeTab === "Bookings" && (
-          <section className="mt-6 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-slate-800 text-slate-400">
-                <tr>
-                  <th className="p-4">Player</th>
-                  <th className="p-4">Venue</th>
-                  <th className="p-4">Date</th>
-                  <th className="p-4">Slot</th>
-                  <th className="p-4">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.map((booking) => (
-                  <tr key={booking._id} className="border-b border-slate-800/80 last:border-0">
-                    <td className="p-4">{booking.userId?.name || "Account unavailable"}<p className="text-xs text-slate-400">{booking.userId?.email}</p></td>
-                    <td className="p-4">{booking.venueId?.name || "Venue unavailable"}</td>
-                    <td className="p-4">{formatDate(booking.bookingDate)}</td>
-                    <td className="p-4">{booking.slot}</td>
-                    <td className="p-4">{booking.status}</td>
-                  </tr>
-                ))}
-                {!bookings.length && <tr><td className="p-5 text-slate-400" colSpan="5">No booking history yet.</td></tr>}
-              </tbody>
-            </table>
-          </section>
+          <AdminBookingsSection
+            bookings={bookings}
+            pagination={bookingsPagination}
+            onPageChange={setBookingPage}
+          />
         )}
 
         {activeTab === "Games" && (
-          <section className="mt-6 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="border-b border-slate-800 text-slate-400">
-                <tr>
-                  <th className="p-4">Game</th>
-                  <th className="p-4">Organizer</th>
-                  <th className="p-4">Venue / sport</th>
-                  <th className="p-4">Players</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {games.map((game) => (
-                  <tr key={game._id} className="border-b border-slate-800/80 last:border-0">
-                    <td className="p-4">{game.title}<p className="text-xs text-slate-400">{formatDate(game.createdAt)}</p></td>
-                    <td className="p-4">{game.organizerId?.name || "Account unavailable"}</td>
-                    <td className="p-4">{game.bookingId?.venueId?.name || "Venue unavailable"}<p className="text-xs text-slate-400">{game.sport}</p></td>
-                    <td className="p-4">{game.joinedPlayers?.length || 0} / {game.maxPlayers}</td>
-                    <td className="p-4">{game.status}</td>
-                    <td className="p-4">
-                      <button type="button" onClick={() => removeGame(game)} className="text-red-300 hover:text-red-200">
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!games.length && <tr><td className="p-5 text-slate-400" colSpan="6">No community games found.</td></tr>}
-              </tbody>
-            </table>
-          </section>
+          <AdminGamesSection
+            games={games}
+            pagination={gamesPagination}
+            onPageChange={setGamePage}
+            onRemoveGame={removeGame}
+          />
         )}
 
         {venueFormOpen && (

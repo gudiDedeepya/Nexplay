@@ -3,15 +3,22 @@ import { AuthContext } from "./authContext";
 import api from "../services/api";
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [token, setToken] = useState(() => {
+    localStorage.removeItem("token");
+    return sessionStorage.getItem("token");
+  });
   const [roleState, setRoleState] = useState({ token: null, role: null });
   const role = roleState.token === token ? roleState.role : null;
 
   useEffect(() => {
-    const syncToken = () => setToken(localStorage.getItem("token"));
+    const syncToken = () => setToken(sessionStorage.getItem("token"));
     window.addEventListener("storage", syncToken);
+    window.addEventListener("auth:expired", syncToken);
 
-    return () => window.removeEventListener("storage", syncToken);
+    return () => {
+      window.removeEventListener("storage", syncToken);
+      window.removeEventListener("auth:expired", syncToken);
+    };
   }, []);
 
   useEffect(() => {
@@ -33,12 +40,12 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const login = (newToken) => {
-    localStorage.setItem("token", newToken);
+    sessionStorage.setItem("token", newToken);
     setToken(newToken);
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
     setToken(null);
   };
 

@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import VenueCard from "../components/VenueCard";
+import PaginationControls from "../components/PaginationControls";
 import { filterVenuesByPrice } from "../utils/filterVenues";
 
 function filtersFromParams(params) {
@@ -17,6 +18,7 @@ function filtersFromParams(params) {
 
 function Venues() {
     const [venues, setVenues] = useState([]);
+    const [pagination, setPagination] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
     const paramsKey = searchParams.toString();
     const [requestState, setRequestState] = useState({
@@ -33,10 +35,14 @@ function Venues() {
         async function loadVenues() {
             try {
                 const response = await api.get("/venues", {
-                    params: filtersFromParams(new URLSearchParams(paramsKey))
+                    params: {
+                        ...filtersFromParams(new URLSearchParams(paramsKey)),
+                        page: new URLSearchParams(paramsKey).get("page") || 1
+                    }
                 });
                 if (active) {
                     setVenues(response.data.venues);
+                    setPagination(response.data.pagination);
                     setRequestState({ key: paramsKey, status: "loaded", error: "" });
                 }
             } catch (error) {
@@ -88,6 +94,13 @@ function Venues() {
     function clearFilters() {
         setFilterError("");
         setSearchParams({});
+    }
+
+    function changePage(page) {
+        const params = new URLSearchParams(searchParams);
+        if (page === 1) params.delete("page");
+        else params.set("page", String(page));
+        setSearchParams(params);
     }
 
     const loading = requestState.key !== paramsKey || requestState.status === "loading";
@@ -209,6 +222,9 @@ function Venues() {
                         </div>
                     )}
                 </div>
+                {!loading && requestState.status !== "error" && (
+                    <PaginationControls pagination={pagination} onPageChange={changePage} />
+                )}
             </main>
         </div>
     );

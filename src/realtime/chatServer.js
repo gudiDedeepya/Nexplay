@@ -1,13 +1,39 @@
 import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
 import { getJwtSecret } from "../config/security.js";
-import { chatMessageModel, gameModel, userModel } from "../models/userschema.js";
+import { chatMessageModel } from "../models/chatMessage.js";
+import { gameModel } from "../models/game.js";
+import { userModel } from "../models/user.js";
 
 function roomForGame(gameId) {
   return `game:${gameId}`;
 }
 
 let chatIo;
+const messageAttemptsByUser = new Map();
+const MESSAGE_RATE_LIMIT = 8;
+const MESSAGE_RATE_WINDOW_MS = 10_000;
+
+function allowChatMessage(userId, now = Date.now()) {
+  if (messageAttemptsByUser.size > 1000) {
+    for (const [user, attempts] of messageAttemptsByUser) {
+      if (!attempts.length || attempts[attempts.length - 1] <= now - MESSAGE_RATE_WINDOW_MS) {
+        messageAttemptsByUser.delete(user);
+      }
+    }
+  }
+
+  const recentAttempts = (messageAttemptsByUser.get(userId) || [])
+    .filter((timestamp) => timestamp > now - MESSAGE_RATE_WINDOW_MS);
+  if (recentAttempts.length >= MESSAGE_RATE_LIMIT) {
+    messageAttemptsByUser.set(userId, recentAttempts);
+    return false;
+  }
+
+  recentAttempts.push(now);
+  messageAttemptsByUser.set(userId, recentAttempts);
+  return true;
+}
 
 export async function revokeGameChatAccess(gameId, userId) {
   if (!chatIo) return;
@@ -18,6 +44,19 @@ export async function revokeGameChatAccess(gameId, userId) {
     memberSockets.map(async (socket) => {
       socket.emit("game:access-revoked", { gameId });
       await socket.leave(roomForGame(gameId));
+    })
+  );
+}
+
+export async function revokeAllGameChatAccess(gameId, reason) {
+  if (!chatIo) return;
+
+  const room = roomForGame(gameId);
+  const sockets = await chatIo.in(room).fetchSockets();
+  await Promise.all(
+    sockets.map(async (socket) => {
+      socket.emit("game:access-revoked", { gameId, reason });
+      await socket.leave(room);
     })
   );
 }
@@ -129,6 +168,13 @@ export function attachChatServer(httpServer, allowedOrigins) {
           (typeof clientMessageId !== "string" || clientMessageId.length > 100)
         ) {
           return reply({ ok: false, message: "Invalid message identifier" });
+        }
+
+        if (!allowChatMessage(socket.data.userId)) {
+          return reply({
+            ok: false,
+            message: "You are sending messages too quickly. Please wait a moment."
+          });
         }
 
         const game = await gameModel.findOne({

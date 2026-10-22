@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState }
 import { AuthContext } from "../context/authContext";
 import { useGameChat } from "../hooks/useGameChat";
 import api from "../services/api";
+import { getUserIdFromToken } from "../utils/jwt";
 
 const PAGE_SIZE = 40;
 
@@ -21,16 +22,6 @@ function mergeMessages(current, incoming) {
     return [...messagesById.values()].sort(
         (left, right) => new Date(left.createdAt) - new Date(right.createdAt)
     );
-}
-
-function getUserIdFromToken(token) {
-    try {
-        const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-        const decoded = JSON.parse(atob(payload));
-        return typeof decoded.userId === "string" ? decoded.userId : "";
-    } catch {
-        return "";
-    }
 }
 
 function GameChatModal({ game, onClose }) {
@@ -107,11 +98,11 @@ function GameChatModal({ game, onClose }) {
                 mergeMessages(current, [{ ...message, clientMessageId }])
             );
         };
-        const handleAccessRevoked = ({ gameId }) => {
+        const handleAccessRevoked = ({ gameId, reason }) => {
             if (gameId !== game._id) return;
             setChatJoined(false);
             setAccessRevoked(true);
-            setError("You no longer have access to this game's chat.");
+            setError(reason || "You no longer have access to this game's chat.");
         };
         const handleConnectError = () => {
             setChatJoined(false);

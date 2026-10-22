@@ -1,9 +1,14 @@
 import express from "express";
 import mongoose from "mongoose";
 import { auth, optionalAuth } from "../middlewares/authmiddleware.js";
-import { bookingModel, chatMessageModel, gameModel } from "../models/userschema.js";
+import { bookingModel } from "../models/booking.js";
+import { chatMessageModel } from "../models/chatMessage.js";
+import { gameModel } from "../models/game.js";
 import { validateGameData } from "../utils/validators.js";
 import { revokeGameChatAccess } from "../realtime/chatServer.js";
+import { getPagination, paginationDetails } from "../utils/pagination.js";
+import { expirePastGames } from "../utils/gameExpiry.js";
+import { slotStartInTimeZone } from "../utils/bookingDates.js";
 
 const router = express.Router();
 
@@ -29,6 +34,14 @@ router.post("/", auth, async (req, res, next) => {
       return res.status(400).json({ message: "Cannot create a game for a cancelled booking" });
     }
 
+    const expiresAt = slotStartInTimeZone(
+      booking.bookingDate.toISOString().slice(0, 10),
+      booking.slot
+    );
+    if (expiresAt <= new Date()) {
+      return res.status(400).json({ message: "Games can only be created for future bookings." });
+    }
+
     const existingGame = await gameModel.findOne({ bookingId });
     if (existingGame) {
       return res.status(400).json({ message: "Game already exists for this booking" });
@@ -43,7 +56,8 @@ router.post("/", auth, async (req, res, next) => {
       joinedPlayers: [req.userId],
       skillLevel,
       description,
-      status: "Open"
+      status: "Open",
+      expiresAt
     });
 
     return res.status(201).json({ message: "Game created successfully", game });
@@ -54,15 +68,27 @@ router.post("/", auth, async (req, res, next) => {
 
 router.get("/", optionalAuth, async (req, res, next) => {
   try {
-    const games = await gameModel
-      .find({ status: "Open" })
+    const pagination = getPagination(req.query);
+    if (!pagination) {
+      return res.status(400).json({ message: "Invalid pagination parameters." });
+    }
+    await expirePastGames();
+    const filter = { status: "Open", expiresAt: { $gt: new Date() } };
+    const [totalItems, games] = await Promise.all([
+      gameModel.countDocuments(filter),
+      gameModel
+      .find(filter)
+      .sort({ expiresAt: 1, _id: 1 })
+      .skip(pagination.skip)
+      .limit(pagination.limit)
       .populate("organizerId", "name")
       .populate({
         path: "bookingId",
         populate: {
           path: "venueId"
         }
-      });
+      })
+    ]);
 
     const gamesWithMembership = games.map((game) => {
       const gameData = game.toObject();
@@ -73,7 +99,10 @@ router.get("/", optionalAuth, async (req, res, next) => {
       return gameData;
     });
 
-    return res.status(200).json({ games: gamesWithMembership });
+    return res.status(200).json({
+      games: gamesWithMembership,
+      pagination: paginationDetails(pagination.page, pagination.limit, totalItems)
+    });
   } catch (error) {
     next(error);
   }
@@ -140,12 +169,14 @@ router.post("/:gameId/join", auth, async (req, res, next) => {
       return res.status(400).json({ message: "Invalid game ID" });
     }
 
+    await expirePastGames();
     const gameId = new mongoose.Types.ObjectId(req.params.gameId);
     const playerId = new mongoose.Types.ObjectId(req.userId);
     const result = await gameModel.collection.updateOne(
       {
         _id: gameId,
         status: "Open",
+        expiresAt: { $gt: new Date() },
         joinedPlayers: { $ne: playerId },
         $expr: {
           $lt: [
@@ -267,6 +298,7 @@ router.delete("/:gameId/leave", auth, async (req, res, next) => {
 
 router.get("/my-games", auth, async (req, res, next) => {
   try {
+    await expirePastGames();
     const games = await gameModel
       .find({ organizerId: req.userId })
       .populate({
@@ -284,6 +316,7 @@ router.get("/my-games", auth, async (req, res, next) => {
 
 router.get("/joined-games", auth, async (req, res, next) => {
   try {
+    await expirePastGames();
     const games = await gameModel
       .find({ joinedPlayers: req.userId })
       .populate({

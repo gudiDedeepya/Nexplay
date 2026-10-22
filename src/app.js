@@ -1,5 +1,6 @@
 ﻿import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import venueRoutes from "./routes/venueRoutes.js";
@@ -11,6 +12,8 @@ import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : false);
+app.use(helmet());
 
 export const allowedOrigins = (
   process.env.FRONTEND_ORIGIN || "http://localhost:5173,http://127.0.0.1:5173"

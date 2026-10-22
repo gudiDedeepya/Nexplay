@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { connectDB } from "../config/db.js";
-import { userModel } from "../models/userschema.js";
+import { userModel } from "../models/user.js";
 
 dotenv.config();
 

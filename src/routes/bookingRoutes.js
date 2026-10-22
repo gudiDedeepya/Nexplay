@@ -1,11 +1,9 @@
 import express from "express";
 import { auth } from "../middlewares/authmiddleware.js";
-import {
-  bookingModel,
-  chatMessageModel,
-  gameModel,
-  venueModel
-} from "../models/userschema.js";
+import { bookingModel } from "../models/booking.js";
+import { chatMessageModel } from "../models/chatMessage.js";
+import { gameModel } from "../models/game.js";
+import { venueModel } from "../models/venue.js";
 import { validateBookingData } from "../utils/validators.js";
 import { getVenueSlots } from "../utils/venueSlots.js";
 import {
@@ -15,6 +13,7 @@ import {
   parseBookingDate,
   slotStartInTimeZone
 } from "../utils/bookingDates.js";
+import { revokeAllGameChatAccess } from "../realtime/chatServer.js";
 
 const router = express.Router();
 
@@ -169,6 +168,7 @@ router.delete("/:bookingId", auth, async (req, res, next) => {
     const game = await gameModel.findOneAndDelete({ bookingId: booking._id });
     if (game) {
       await chatMessageModel.deleteMany({ gameId: game._id });
+      await revokeAllGameChatAccess(game._id.toString(), "The booking was cancelled.");
     }
 
     return res.status(200).json({ message: "Booking cancelled" });

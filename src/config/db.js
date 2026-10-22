@@ -1,6 +1,7 @@
 ﻿import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { bookingModel, gameModel } from "../models/userschema.js";
+import { bookingModel } from "../models/booking.js";
+import { gameModel } from "../models/game.js";
 
 dotenv.config();
 

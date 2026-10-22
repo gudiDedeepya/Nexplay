@@ -1,13 +1,14 @@
 import express from "express";
 import mongoose from "mongoose";
 import { auth, requireAdmin } from "../middlewares/authmiddleware.js";
-import {
-  bookingModel,
-  chatMessageModel,
-  gameModel,
-  venueModel
-} from "../models/userschema.js";
+import { bookingModel } from "../models/booking.js";
+import { chatMessageModel } from "../models/chatMessage.js";
+import { gameModel } from "../models/game.js";
+import { venueModel } from "../models/venue.js";
+import { getPagination, paginationDetails } from "../utils/pagination.js";
+import { expirePastGames } from "../utils/gameExpiry.js";
 import { validateVenueData } from "../utils/validators.js";
+import { revokeAllGameChatAccess } from "../realtime/chatServer.js";
 
 const router = express.Router();
 router.use(auth, requireAdmin);
@@ -57,8 +58,22 @@ router.get("/dashboard", async (req, res, next) => {
 
 router.get("/venues", async (req, res, next) => {
   try {
-    const venues = await venueModel.find().sort({ createdAt: -1 });
-    return res.status(200).json({ venues });
+    const pagination = getPagination(req.query);
+    if (!pagination) {
+      return res.status(400).json({ message: "Invalid pagination parameters." });
+    }
+    const [totalItems, venues] = await Promise.all([
+      venueModel.countDocuments(),
+      venueModel
+        .find()
+        .sort({ createdAt: -1, _id: 1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+    ]);
+    return res.status(200).json({
+      venues,
+      pagination: paginationDetails(pagination.page, pagination.limit, totalItems)
+    });
   } catch (error) {
     next(error);
   }
@@ -150,13 +165,26 @@ router.delete("/venues/:venueId", async (req, res, next) => {
 
 router.get("/bookings", async (req, res, next) => {
   try {
-    const bookings = await bookingModel
-      .find()
-      .sort({ bookingDate: -1, createdAt: -1 })
-      .populate("userId", "name email")
-      .populate("venueId", "name sport location pricePerHour");
+    const pagination = getPagination(req.query, { defaultLimit: 20 });
+    if (!pagination) {
+      return res.status(400).json({ message: "Invalid pagination parameters." });
+    }
+    const filter = {};
+    const [totalItems, bookings] = await Promise.all([
+      bookingModel.countDocuments(filter),
+      bookingModel
+        .find(filter)
+        .sort({ bookingDate: -1, createdAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("userId", "name email")
+        .populate("venueId", "name sport location pricePerHour")
+    ]);
 
-    return res.status(200).json({ bookings });
+    return res.status(200).json({
+      bookings,
+      pagination: paginationDetails(pagination.page, pagination.limit, totalItems)
+    });
   } catch (error) {
     next(error);
   }
@@ -164,14 +192,27 @@ router.get("/bookings", async (req, res, next) => {
 
 router.get("/games", async (req, res, next) => {
   try {
-    const games = await gameModel
-      .find()
-      .sort({ createdAt: -1 })
-      .populate("organizerId", "name email")
-      .populate("joinedPlayers", "name email")
-      .populate({ path: "bookingId", populate: { path: "venueId", select: "name sport location" } });
+    const pagination = getPagination(req.query, { defaultLimit: 20 });
+    if (!pagination) {
+      return res.status(400).json({ message: "Invalid pagination parameters." });
+    }
+    await expirePastGames();
+    const [totalItems, games] = await Promise.all([
+      gameModel.countDocuments(),
+      gameModel
+        .find()
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate("organizerId", "name email")
+        .populate("joinedPlayers", "name email")
+        .populate({ path: "bookingId", populate: { path: "venueId", select: "name sport location" } })
+    ]);
 
-    return res.status(200).json({ games });
+    return res.status(200).json({
+      games,
+      pagination: paginationDetails(pagination.page, pagination.limit, totalItems)
+    });
   } catch (error) {
     next(error);
   }
@@ -189,6 +230,7 @@ router.delete("/games/:gameId", async (req, res, next) => {
     }
 
     await chatMessageModel.deleteMany({ gameId: game._id });
+    await revokeAllGameChatAccess(game._id.toString(), "Game removed by an administrator.");
     return res.status(200).json({ message: "Game and its chat history removed" });
   } catch (error) {
     next(error);

@@ -5,7 +5,10 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 ## Features
 
 - User signup and signin
-- JWT-based protected routes
+- Generic sign-in and signup responses that avoid exposing account existence
+- Helmet security headers and rate limits for signup/sign-in and real-time chat messages
+- Passwords require at least 12 characters; signed-in sessions expire after one hour
+- JWT-based protected routes with tokens stored for the current browser tab session
 - Venue listing with name/location search and sport and price filters
 - Venue booking for valid date and slot combinations
 - Venue-local (Asia/Kolkata) booking dates and past-slot prevention
@@ -14,8 +17,10 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - Cancellation allowed up to 6 hours before the slot starts
 - Duplicate booking protection for concurrent requests
 - Community game creation from bookings
+- Games can only be created for future bookings and expire at the booked slot's start time
 - Game join/leave flows, including leaving joined games from the player dashboard
-- Real-time chat for joined community-game participants, with unread counts, sender/timestamp labels, paginated history, reconnect handling, and access revocation on leaving a game
+- Real-time chat for joined community-game participants, with unread counts, sender/timestamp labels, paginated history, reconnect handling, per-user message rate limits, and access revocation on leaving or game removal
+- Paginated venue, community game, admin game, and admin booking lists
 - User profile dashboard with bookings and games
 - Admin dashboard for venue management, booking history, and community games
 
@@ -25,7 +30,7 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - `src/app.js` – Express app setup and route mounting
 - `src/config/db.js` – MongoDB connection setup
 - `src/middlewares` – auth and error middleware
-- `src/models` – Mongoose schemas
+- `src/models` – separate Mongoose schemas for users, venues, bookings, games, and chat messages
 - `src/routes` – auth, venue, booking, game, and admin route modules
 - `frontend/` – Vite React frontend app
 
@@ -91,5 +96,5 @@ The backend uses Socket.IO over the same Render web service for game chat. `FRON
 
 ## Notes
 
-- Authentication currently uses localStorage for the token, per the project requirement.
+- Authentication tokens are kept in `sessionStorage`, expire after one hour, and are removed when an API request returns 401. There is no refresh-token flow.
 - This project is designed as an MVP and is ready for feature expansion and production hardening.

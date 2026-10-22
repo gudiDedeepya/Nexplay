@@ -6,13 +6,11 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
 import { io as connectSocket } from "socket.io-client";
-import {
-  bookingModel,
-  chatMessageModel,
-  gameModel,
-  userModel,
-  venueModel
-} from "../src/models/userschema.js";
+import { bookingModel } from "../src/models/booking.js";
+import { chatMessageModel } from "../src/models/chatMessage.js";
+import { gameModel } from "../src/models/game.js";
+import { userModel } from "../src/models/user.js";
+import { venueModel } from "../src/models/venue.js";
 import { validateRuntimeConfig } from "../src/config/security.js";
 import { attachChatServer } from "../src/realtime/chatServer.js";
 import {
@@ -60,7 +58,8 @@ async function request(path, { method = "GET", token, body } = {}) {
 
   return {
     status: response.status,
-    body: await response.json()
+    body: await response.json(),
+    headers: response.headers
   };
 }
 
@@ -118,8 +117,10 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
       role: "admin"
     }
   });
-  assert.equal(signup.status, 201);
+  assert.equal(signup.status, 202);
+  assert.equal(signup.body.message, "If account creation was possible, you can now sign in.");
   assert.equal((await userModel.findOne({ email })).role, "user");
+  assert.equal(userModel.collection.name, "users");
 
   const duplicate = await request("/signup", {
     method: "POST",
@@ -129,15 +130,52 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
       password: "ValidPass123"
     }
   });
-  assert.equal(duplicate.status, 403);
+  assert.equal(duplicate.status, 202);
+  assert.equal(duplicate.body.message, signup.body.message);
 
   const signin = await request("/signin", {
     method: "POST",
     body: { email, password: "ValidPass123" }
   });
   assert.equal(signin.status, 200);
+  const claims = jwt.decode(signin.body.token);
+  assert.equal(claims.exp - claims.iat, 60 * 60);
+  const wrongPassword = await request("/signin", {
+    method: "POST",
+    body: { email, password: "WrongPass123" }
+  });
+  const unknownEmail = await request("/signin", {
+    method: "POST",
+    body: { email: `unknown-${randomUUID()}@example.test`, password: "WrongPass123" }
+  });
+  assert.equal(wrongPassword.status, 401);
+  assert.equal(unknownEmail.status, 401);
+  assert.equal(wrongPassword.body.message, unknownEmail.body.message);
   assert.equal((await request("/me", { token: signin.body.token })).status, 200);
   assert.equal((await request("/me")).status, 401);
+});
+
+test("Helmet sets browser security headers", async () => {
+  const health = await request("/health");
+  assert.equal(health.status, 200);
+  assert.equal(health.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("signup requires stronger passwords and sign-in attempts are rate limited", async () => {
+  const weakSignup = await request("/signup", {
+    method: "POST",
+    body: { name: "Weak Password", email: `weak-${randomUUID()}@example.test`, password: "short" }
+  });
+  assert.equal(weakSignup.status, 400);
+
+  let lastResponse;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    lastResponse = await request("/signin", {
+      method: "POST",
+      body: { email: `unknown-${attempt}-${randomUUID()}@example.test`, password: "WrongPass123" }
+    });
+  }
+  assert.equal(lastResponse.status, 429);
 });
 
 test("venue creation requires an administrator account", async () => {
@@ -150,19 +188,20 @@ test("venue creation requires an administrator account", async () => {
     pricePerHour: 500
   };
 
-  const forbidden = await request("/venues", {
+  const forbidden = await request("/admin/venues", {
     method: "POST",
     token: tokenFor(regularUser._id),
     body: venueData
   });
   assert.equal(forbidden.status, 403);
 
-  const created = await request("/venues", {
+  const created = await request("/admin/venues", {
     method: "POST",
     token: tokenFor(adminUser._id),
     body: venueData
   });
   assert.equal(created.status, 201);
+  assert.equal((await request("/venues", { method: "POST", token: tokenFor(adminUser._id), body: venueData })).status, 404);
 });
 
 test("admin dashboard and venue management require admin access and honor venue hours", async () => {
@@ -186,6 +225,12 @@ test("admin dashboard and venue management require admin access and honor venue 
     }
   });
   assert.equal(venueResponse.status, 201);
+  const venuePage = await request("/admin/venues?limit=1", {
+    token: tokenFor(adminUser._id)
+  });
+  assert.equal(venuePage.status, 200);
+  assert.equal(venuePage.body.venues.length, 1);
+  assert.ok(venuePage.body.pagination.totalItems >= 1);
   const venueId = venueResponse.body.venue._id;
 
   const updatedVenue = await request(`/admin/venues/${venueId}`, {
@@ -232,7 +277,12 @@ test("admin dashboard and venue management require admin access and honor venue 
   const history = await request("/admin/bookings", { token: tokenFor(adminUser._id) });
   assert.equal(history.status, 200);
   assert.equal(history.body.bookings.length, 1);
+  assert.equal(history.body.pagination.totalItems, 1);
+  assert.equal((await request("/admin/bookings?limit=51", { token: tokenFor(adminUser._id) })).status, 400);
   assert.equal(history.body.bookings[0].userId.email, regularUser.email);
+  const adminGames = await request("/admin/games?limit=1", { token: tokenFor(adminUser._id) });
+  assert.equal(adminGames.status, 200);
+  assert.equal(adminGames.body.pagination.limit, 1);
 
   const deactivated = await request(`/admin/venues/${venueId}`, {
     method: "DELETE",
@@ -260,6 +310,20 @@ test("venue discovery filters by text, price, and available date and slot", asyn
     pricePerHour: 900,
     operatingHours: { open: "16:00", close: "20:00" }
   });
+  await venueModel.create([
+    {
+      name: "Pagination Test Court A",
+      sport: "Tennis",
+      location: "Test city",
+      pricePerHour: 300
+    },
+    {
+      name: "Pagination Test Court B",
+      sport: "Tennis",
+      location: "Test city",
+      pricePerHour: 350
+    }
+  ]);
   const bookingDate = new Date();
   bookingDate.setDate(bookingDate.getDate() + 2);
   const date = bookingDate.toISOString().slice(0, 10);
@@ -278,6 +342,13 @@ test("venue discovery filters by text, price, and available date and slot", asyn
   const locationSearch = await request("/venues?search=tirupati");
   assert.ok(locationSearch.body.venues.some((item) => item._id === venue._id.toString()));
   assert.ok(!locationSearch.body.venues.some((item) => item._id === otherVenue._id.toString()));
+  const firstPage = await request("/venues?search=pagination%20test&limit=1&page=1");
+  const secondPage = await request("/venues?search=pagination%20test&limit=1&page=2");
+  assert.equal(firstPage.body.venues.length, 1);
+  assert.equal(firstPage.body.pagination.totalItems, 2);
+  assert.equal(firstPage.body.pagination.hasNextPage, true);
+  assert.notEqual(firstPage.body.venues[0]._id, secondPage.body.venues[0]._id);
+  assert.equal((await request("/venues?limit=51")).status, 400);
 
   const availableAtTime = await request(`/venues?date=${date}&slot=18%3A00-19%3A00`);
   assert.ok(availableAtTime.body.venues.some((item) => item._id === venue._id.toString()));
@@ -479,6 +550,70 @@ test("concurrent game joins respect capacity and leaving reopens a full game", a
   );
 });
 
+test("past games expire and cannot be created from a booking in the past", async () => {
+  const organizer = await createUser(`expired-game-${randomUUID()}@example.test`);
+  const venue = await venueModel.create({
+    name: "Expired Game Venue",
+    sport: "Football",
+    location: "Test city",
+    pricePerHour: 600
+  });
+  const oldBooking = await bookingModel.create({
+    userId: organizer._id,
+    venueId: venue._id,
+    bookingDate: new Date("2020-01-01T00:00:00.000Z"),
+    slot: "18:00-19:00"
+  });
+  const pastGame = await gameModel.create({
+    title: "Old Community Game",
+    sport: "Football",
+    bookingId: oldBooking._id,
+    organizerId: organizer._id,
+    maxPlayers: 4,
+    joinedPlayers: [organizer._id],
+    status: "Open"
+  });
+
+  const openGames = await request("/games");
+  assert.equal(openGames.status, 200);
+  assert.equal(openGames.body.games.some((game) => game._id === pastGame._id.toString()), false);
+  assert.equal((await gameModel.findById(pastGame._id)).status, "Expired");
+
+  const newPastBooking = await bookingModel.create({
+    userId: organizer._id,
+    venueId: venue._id,
+    bookingDate: new Date("2020-01-02T00:00:00.000Z"),
+    slot: "18:00-19:00"
+  });
+  const createPastGame = await request("/games", {
+    method: "POST",
+    token: tokenFor(organizer._id),
+    body: { title: "Should Not Start", bookingId: newPastBooking._id.toString(), maxPlayers: 4 }
+  });
+  assert.equal(createPastGame.status, 400);
+  assert.match(createPastGame.body.message, /future bookings/i);
+
+  const futureBooking = await bookingModel.create({
+    userId: organizer._id,
+    venueId: venue._id,
+    bookingDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    slot: "18:00-19:00"
+  });
+  const createdGame = await request("/games", {
+    method: "POST",
+    token: tokenFor(organizer._id),
+    body: { title: "Future Game", bookingId: futureBooking._id.toString(), maxPlayers: 4 }
+  });
+  assert.equal(createdGame.status, 201);
+  assert.equal(
+    new Date(createdGame.body.game.expiresAt).toISOString(),
+    slotStartInTimeZone(
+      futureBooking.bookingDate.toISOString().slice(0, 10),
+      futureBooking.slot
+    ).toISOString()
+  );
+});
+
 test("game chat persists messages and is restricted to joined players", async () => {
   const organizer = await createUser(`chat-organizer-${randomUUID()}@example.test`);
   const participant = await createUser(`chat-player-${randomUUID()}@example.test`);
@@ -514,12 +649,18 @@ test("game chat persists messages and is restricted to joined players", async ()
     listedGames.body.games.find((listedGame) => listedGame._id === game._id.toString()).joinedByMe,
     true
   );
+  const pagedGames = await request("/games?limit=1&page=1");
+  assert.equal(pagedGames.status, 200);
+  assert.equal(pagedGames.body.games.length, 1);
+  assert.ok(pagedGames.body.pagination.totalItems >= 2);
+  assert.equal(pagedGames.body.pagination.hasNextPage, true);
 
   const socket = connectSocket(baseUrl.replace("/api/v1", ""), {
     auth: { token: tokenFor(participant._id) },
     forceNew: true,
     reconnection: false
   });
+  let adminSocket;
 
   try {
     await new Promise((resolve, reject) => {
@@ -531,6 +672,19 @@ test("game chat persists messages and is restricted to joined players", async ()
       socket.emit("game:join", { gameId: game._id.toString() }, resolve);
     });
     assert.equal(joined.ok, true);
+    adminSocket = connectSocket(baseUrl.replace("/api/v1", ""), {
+      auth: { token: tokenFor(organizer._id) },
+      forceNew: true,
+      reconnection: false
+    });
+    await new Promise((resolve, reject) => {
+      adminSocket.once("connect", resolve);
+      adminSocket.once("connect_error", reject);
+    });
+    const organizerJoined = await new Promise((resolve) => {
+      adminSocket.emit("game:join", { gameId: game._id.toString() }, resolve);
+    });
+    assert.equal(organizerJoined.ok, true);
 
     const receivedMessage = new Promise((resolve) => {
       socket.once("game:message", resolve);
@@ -546,14 +700,33 @@ test("game chat persists messages and is restricted to joined players", async ()
 
     const broadcast = await receivedMessage;
     assert.equal(broadcast.message.content, "See you at the match!");
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      const allowed = await new Promise((resolve) => {
+        socket.emit(
+          "game:message",
+          { gameId: game._id.toString(), content: `Rate test ${attempt}` },
+          resolve
+        );
+      });
+      assert.equal(allowed.ok, true);
+    }
+    const limited = await new Promise((resolve) => {
+      socket.emit(
+        "game:message",
+        { gameId: game._id.toString(), content: "One too many" },
+        resolve
+      );
+    });
+    assert.equal(limited.ok, false);
+    assert.match(limited.message, /too quickly/i);
 
     const history = await request(`/games/${game._id}/messages`, {
       token: tokenFor(participant._id)
     });
     assert.equal(history.status, 200);
-    assert.equal(history.body.messages.length, 1);
+    assert.equal(history.body.messages.length, 8);
     assert.equal(history.body.messages[0].senderId.name, "Test Player");
-    assert.equal(await chatMessageModel.countDocuments({ gameId: game._id }), 1);
+    assert.equal(await chatMessageModel.countDocuments({ gameId: game._id }), 8);
 
     await chatMessageModel.insertMany(
       Array.from({ length: 45 }, (_, index) => ({
@@ -573,7 +746,7 @@ test("game chat persists messages and is restricted to joined players", async ()
       { token: tokenFor(participant._id) }
     );
     assert.equal(olderPage.status, 200);
-    assert.equal(olderPage.body.messages.length, 6);
+    assert.equal(olderPage.body.messages.length, 13);
     assert.equal(olderPage.body.hasMore, false);
 
     const outsiderSocket = connectSocket(baseUrl.replace("/api/v1", ""), {
@@ -647,14 +820,51 @@ test("game chat persists messages and is restricted to joined players", async ()
     });
     assert.equal(afterLeaveSend.ok, false);
 
+    const cancellationRevokedPromise = new Promise((resolve) => {
+      adminSocket.once("game:access-revoked", resolve);
+    });
     const cancellation = await request(`/bookings/${booking._id}`, {
       method: "DELETE",
       token: tokenFor(organizer._id)
     });
     assert.equal(cancellation.status, 200);
+    const cancellationRevoked = await cancellationRevokedPromise;
+    assert.equal(cancellationRevoked.gameId, game._id.toString());
+    assert.match(cancellationRevoked.reason, /booking was cancelled/i);
     assert.equal(await chatMessageModel.countDocuments({ gameId: game._id }), 0);
+
+    const adminUser = await createUser(`game-admin-${randomUUID()}@example.test`, "admin");
+    const adminBooking = await bookingModel.create({
+      userId: organizer._id,
+      venueId: venue._id,
+      bookingDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      slot: "19:00-20:00"
+    });
+    const adminDeletedGame = await gameModel.create({
+      title: "Admin Removal Test",
+      sport: "Football",
+      bookingId: adminBooking._id,
+      organizerId: organizer._id,
+      maxPlayers: 3,
+      joinedPlayers: [organizer._id],
+      status: "Open"
+    });
+    const adminJoin = await new Promise((resolve) => {
+      adminSocket.emit("game:join", { gameId: adminDeletedGame._id.toString() }, resolve);
+    });
+    assert.equal(adminJoin.ok, true);
+    const adminRevoked = new Promise((resolve) => {
+      adminSocket.once("game:access-revoked", resolve);
+    });
+    const deletion = await request(`/admin/games/${adminDeletedGame._id}`, {
+      method: "DELETE",
+      token: tokenFor(adminUser._id)
+    });
+    assert.equal(deletion.status, 200);
+    assert.equal((await adminRevoked).gameId, adminDeletedGame._id.toString());
   } finally {
     socket.disconnect();
+    adminSocket?.disconnect();
   }
 });
 

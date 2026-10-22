@@ -3,19 +3,10 @@ import { io } from "socket.io-client";
 import { useAuth } from "../hooks/useAuth";
 import { GameChatContext } from "./gameChatContext";
 import api from "../services/api";
+import { getUserIdFromToken } from "../utils/jwt";
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || "https://nexplaybackend.onrender.com/api/v1";
 const socketUrl = new URL(apiBaseUrl).origin;
-
-function getUserIdFromToken(token) {
-  try {
-    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = JSON.parse(atob(payload));
-    return typeof decoded.userId === "string" ? decoded.userId : "";
-  } catch {
-    return "";
-  }
-}
 
 export function GameChatProvider({ children }) {
   const { token } = useAuth();

@@ -38,11 +38,15 @@ function Login() {
 
           <input
             type="password"
+            autoComplete="current-password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full p-3 rounded-lg bg-slate-700 text-white outline-none"
           />
+          <p className="-mt-3 text-xs text-slate-400">
+            Sign-in sessions expire after one hour.
+          </p>
 
           <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-lg font-semibold">
             Login

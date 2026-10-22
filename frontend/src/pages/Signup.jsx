@@ -14,7 +14,7 @@ function Signup() {
 
     try {
       await api.post("/signup", { name, email, password, location });
-      alert("Account Created Successfully");
+      alert("If account creation was possible, you can now sign in.");
       navigate("/");
     } catch (error) {
       alert(error.response?.data?.message || "Signup Failed");
@@ -46,11 +46,17 @@ function Signup() {
 
           <input
             type="password"
+            minLength={12}
+            maxLength={72}
+            autoComplete="new-password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full p-3 rounded-lg bg-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <p className="-mt-3 text-xs text-slate-400">
+            Use at least 12 characters. Sessions expire after one hour.
+          </p>
 
           <input
             type="text"

@@ -11,8 +11,12 @@ export function validateSignupData({ name, email, password, location }) {
     return "A valid email is required.";
   }
 
-  if (!isNonEmptyString(password) || password.length < 6) {
-    return "Password must be at least 6 characters long.";
+  if (
+    !isNonEmptyString(password) ||
+    password.length < 12 ||
+    Buffer.byteLength(password, "utf8") > 72
+  ) {
+    return "Password must be at least 12 characters and no more than 72 UTF-8 bytes.";
   }
 
   if (location !== undefined && location !== null && !isNonEmptyString(location)) {
@@ -27,8 +31,8 @@ export function validateSigninData({ email, password }) {
     return "A valid email is required.";
   }
 
-  if (!isNonEmptyString(password) || password.length < 6) {
-    return "Password must be at least 6 characters long.";
+  if (!isNonEmptyString(password) || Buffer.byteLength(password, "utf8") > 72) {
+    return "Invalid email or password.";
   }
 
   return null;

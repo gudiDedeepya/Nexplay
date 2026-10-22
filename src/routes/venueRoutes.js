@@ -1,9 +1,9 @@
 import express from "express";
 import mongoose from "mongoose";
-import { auth, requireAdmin } from "../middlewares/authmiddleware.js";
-import { bookingModel, venueModel } from "../models/userschema.js";
-import { validateVenueData } from "../utils/validators.js";
+import { bookingModel } from "../models/booking.js";
+import { venueModel } from "../models/venue.js";
 import { getVenueSlots } from "../utils/venueSlots.js";
+import { getPagination, paginationDetails } from "../utils/pagination.js";
 import {
   addCalendarDays,
   BOOKING_TIME_ZONE,
@@ -32,31 +32,13 @@ router.get("/:venueId", async (req, res, next) => {
   }
 });
 
-router.post("/", auth, requireAdmin, async (req, res, next) => {
-  try {
-    const validationError = validateVenueData(req.body);
-    if (validationError) {
-      return res.status(400).json({ message: validationError });
-    }
-
-    const { name, sport, location, pricePerHour, description } = req.body;
-    const venue = await venueModel.create({
-      name,
-      sport,
-      location,
-      pricePerHour: Number(pricePerHour),
-      description
-    });
-
-    return res.status(201).json({ message: "Venue created successfully", venue });
-  } catch (error) {
-    next(error);
-  }
-});
-
 router.get("/", async (req, res, next) => {
   try {
     const { sport, search, minPrice, maxPrice, date, slot } = req.query;
+    const pagination = getPagination(req.query);
+    if (!pagination) {
+      return res.status(400).json({ message: "Invalid pagination parameters." });
+    }
     const filter = {};
 
     if (sport) {
@@ -122,8 +104,10 @@ router.get("/", async (req, res, next) => {
     }
     filter.active = { $ne: false };
 
-    let venues = await venueModel.find(filter);
+    let venues;
+    let totalItems;
     if (date !== undefined) {
+      venues = await venueModel.find(filter).sort({ createdAt: -1, _id: 1 });
       const { start: startOfDay, end: endOfDay } = dateRangeForBooking(date);
       const bookings = await bookingModel.find({
         venueId: { $in: venues.map((venue) => venue._id) },
@@ -146,9 +130,23 @@ router.get("/", async (req, res, next) => {
         });
         return slot ? availableSlots.includes(slot) : availableSlots.length > 0;
       });
+      totalItems = venues.length;
+      venues = venues.slice(pagination.skip, pagination.skip + pagination.limit);
+    } else {
+      [totalItems, venues] = await Promise.all([
+        venueModel.countDocuments(filter),
+        venueModel
+          .find(filter)
+          .sort({ createdAt: -1, _id: 1 })
+          .skip(pagination.skip)
+          .limit(pagination.limit)
+      ]);
     }
 
-    return res.status(200).json({ venues });
+    return res.status(200).json({
+      venues,
+      pagination: paginationDetails(pagination.page, pagination.limit, totalItems)
+    });
   } catch (error) {
     next(error);
   }
