@@ -35,9 +35,4 @@ export function validateRuntimeConfig() {
     throw new Error("REDIS_URL must be configured for shared chat rate limits in production");
   }
 
-  for (const key of ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"]) {
-    if (!process.env[key]) {
-      throw new Error(`${key} must be configured in production for email verification`);
-    }
-  }
 }

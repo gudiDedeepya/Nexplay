@@ -18,8 +18,8 @@ function Signup() {
     setMessage("");
     setError("");
     try {
-      await api.post("/signup", { name, email, password, location });
-      setMessage("If this email can be registered, we sent a verification link. Check your inbox. Already registered? Sign in.");
+      const { data } = await api.post("/signup", { name, email, password, location });
+      setMessage(data.message);
     } catch (error) {
       setError(error.response?.data?.message || "Signup failed. Please try again.");
     } finally {
@@ -75,7 +75,7 @@ function Signup() {
           />
 
           <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 transition p-3 rounded-lg font-semibold text-white disabled:opacity-50">
-            {loading ? "Sending verification..." : "Signup"}
+            {loading ? "Creating account..." : "Signup"}
           </button>
         </form>
 

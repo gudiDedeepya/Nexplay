@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { io as connectSocket } from "socket.io-client";
 import { bookingModel } from "../src/models/booking.js";
 import { chatMessageModel } from "../src/models/chatMessage.js";
@@ -17,10 +17,6 @@ import { createInMemoryChatRateLimiter, createRedisChatRateLimiter } from "../sr
 import {
   resetAuthRateLimitsForTests
 } from "../src/routes/authRoutes.js";
-import {
-  resetVerificationEmailSender,
-  setVerificationEmailSender
-} from "../src/services/emailService.js";
 import { expirePastGames } from "../src/utils/gameExpiry.js";
 import {
   dateKeyInTimeZone,
@@ -38,8 +34,6 @@ databaseUrl.pathname = `/${databaseName}`;
 
 let baseUrl;
 let server;
-const verificationOutbox = [];
-
 function tokenFor(userId) {
   return jwt.sign({ userId: userId.toString() }, process.env.JWT_SECRET, {
     expiresIn: "1h"
@@ -75,7 +69,6 @@ async function request(path, { method = "GET", token, body } = {}) {
 
 before(async () => {
   process.env.FRONTEND_ORIGIN ||= "http://localhost:5173";
-  setVerificationEmailSender(async (email) => verificationOutbox.push(email));
   await mongoose.connect(databaseUrl.toString());
   await Promise.all([
     userModel.syncIndexes(),
@@ -101,7 +94,6 @@ before(async () => {
 });
 
 after(async () => {
-  resetVerificationEmailSender();
   if (server) {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -132,16 +124,10 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
       role: "admin"
     }
   });
-  assert.equal(signup.status, 202);
-  assert.equal(
-    signup.body.message,
-    "If this email can be registered, a verification email has been sent. Existing account holders can sign in."
-  );
-  const createdUser = await userModel.findOne({ email }).select("+verificationTokenHash");
+  assert.equal(signup.status, 201);
+  assert.equal(signup.body.message, "Signup successful. You can now sign in.");
+  const createdUser = await userModel.findOne({ email });
   assert.equal(createdUser.role, "user");
-  assert.equal(createdUser.emailVerified, false);
-  assert.ok(createdUser.verificationTokenHash);
-  assert.equal(verificationOutbox.length, 1);
   assert.equal(userModel.collection.name, "users");
 
   const duplicate = await request("/signup", {
@@ -152,41 +138,8 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
       password: "ValidPass123"
     }
   });
-  assert.equal(duplicate.status, 202);
+  assert.equal(duplicate.status, 201);
   assert.equal(duplicate.body.message, signup.body.message);
-  assert.equal(verificationOutbox.length, 2);
-
-  const unverifiedSignIn = await request("/signin", {
-    method: "POST",
-    body: { email, password: "ValidPass123" }
-  });
-  assert.equal(unverifiedSignIn.status, 401);
-
-  const verificationToken = new URL(verificationOutbox[1].verificationUrl).searchParams.get("token");
-  const verified = await request("/verify-email", {
-    method: "POST",
-    body: { token: verificationToken }
-  });
-  assert.equal(verified.status, 200);
-  assert.equal((await userModel.findOne({ email })).emailVerified, true);
-  assert.equal(
-    (await request("/verify-email", { method: "POST", body: { token: verificationToken } })).status,
-    400
-  );
-
-  const expiredToken = randomUUID().replaceAll("-", "").padEnd(64, "a");
-  await userModel.create({
-    name: "Expired Verification",
-    email: `expired-verification-${randomUUID()}@example.test`,
-    password: await bcrypt.hash("ValidPass123", 12),
-    emailVerified: false,
-    verificationTokenHash: createHash("sha256").update(expiredToken).digest("hex"),
-    verificationTokenExpiresAt: new Date(Date.now() - 1000)
-  });
-  assert.equal(
-    (await request("/verify-email", { method: "POST", body: { token: expiredToken } })).status,
-    400
-  );
 
   const signin = await request("/signin", {
     method: "POST",
@@ -1036,12 +989,7 @@ test("production configuration rejects missing or weak secrets and missing servi
     jwtSecret: process.env.JWT_SECRET,
     mongoUri: process.env.MONGO_URI,
     frontendOrigin: process.env.FRONTEND_ORIGIN,
-    redisUrl: process.env.REDIS_URL,
-    smtpHost: process.env.SMTP_HOST,
-    smtpPort: process.env.SMTP_PORT,
-    smtpUser: process.env.SMTP_USER,
-    smtpPass: process.env.SMTP_PASS,
-    emailFrom: process.env.EMAIL_FROM
+    redisUrl: process.env.REDIS_URL
   };
 
   try {
@@ -1050,11 +998,6 @@ test("production configuration rejects missing or weak secrets and missing servi
     delete process.env.MONGO_URI;
     delete process.env.FRONTEND_ORIGIN;
     delete process.env.REDIS_URL;
-    delete process.env.SMTP_HOST;
-    delete process.env.SMTP_PORT;
-    delete process.env.SMTP_USER;
-    delete process.env.SMTP_PASS;
-    delete process.env.EMAIL_FROM;
     assert.throws(validateRuntimeConfig, /JWT_SECRET must be configured/);
 
     process.env.JWT_SECRET = "short";
@@ -1070,13 +1013,6 @@ test("production configuration rejects missing or weak secrets and missing servi
     assert.throws(validateRuntimeConfig, /REDIS_URL must be configured/);
 
     process.env.REDIS_URL = "redis://localhost:6379";
-    assert.throws(validateRuntimeConfig, /SMTP_HOST must be configured/);
-
-    process.env.SMTP_HOST = "smtp.example.test";
-    process.env.SMTP_PORT = "587";
-    process.env.SMTP_USER = "user";
-    process.env.SMTP_PASS = "pass";
-    process.env.EMAIL_FROM = "nexplay@example.test";
     assert.doesNotThrow(validateRuntimeConfig);
   } finally {
     if (original.nodeEnv === undefined) delete process.env.NODE_ENV;
@@ -1092,15 +1028,5 @@ test("production configuration rejects missing or weak secrets and missing servi
     else process.env.FRONTEND_ORIGIN = original.frontendOrigin;
     if (original.redisUrl === undefined) delete process.env.REDIS_URL;
     else process.env.REDIS_URL = original.redisUrl;
-    if (original.smtpHost === undefined) delete process.env.SMTP_HOST;
-    else process.env.SMTP_HOST = original.smtpHost;
-    if (original.smtpPort === undefined) delete process.env.SMTP_PORT;
-    else process.env.SMTP_PORT = original.smtpPort;
-    if (original.smtpUser === undefined) delete process.env.SMTP_USER;
-    else process.env.SMTP_USER = original.smtpUser;
-    if (original.smtpPass === undefined) delete process.env.SMTP_PASS;
-    else process.env.SMTP_PASS = original.smtpPass;
-    if (original.emailFrom === undefined) delete process.env.EMAIL_FROM;
-    else process.env.EMAIL_FROM = original.emailFrom;
   }
 });
