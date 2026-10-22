@@ -30,4 +30,14 @@ export function validateRuntimeConfig() {
   if (!process.env.FRONTEND_ORIGIN) {
     throw new Error("FRONTEND_ORIGIN must be configured in production");
   }
+
+  if (!process.env.REDIS_URL) {
+    throw new Error("REDIS_URL must be configured for shared chat rate limits in production");
+  }
+
+  for (const key of ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"]) {
+    if (!process.env[key]) {
+      throw new Error(`${key} must be configured in production for email verification`);
+    }
+  }
 }

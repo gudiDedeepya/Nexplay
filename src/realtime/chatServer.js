@@ -4,36 +4,14 @@ import { getJwtSecret } from "../config/security.js";
 import { chatMessageModel } from "../models/chatMessage.js";
 import { gameModel } from "../models/game.js";
 import { userModel } from "../models/user.js";
+import { createInMemoryChatRateLimiter } from "../services/chatRateLimiter.js";
+import { expirePastGames } from "../utils/gameExpiry.js";
 
 function roomForGame(gameId) {
   return `game:${gameId}`;
 }
 
 let chatIo;
-const messageAttemptsByUser = new Map();
-const MESSAGE_RATE_LIMIT = 8;
-const MESSAGE_RATE_WINDOW_MS = 10_000;
-
-function allowChatMessage(userId, now = Date.now()) {
-  if (messageAttemptsByUser.size > 1000) {
-    for (const [user, attempts] of messageAttemptsByUser) {
-      if (!attempts.length || attempts[attempts.length - 1] <= now - MESSAGE_RATE_WINDOW_MS) {
-        messageAttemptsByUser.delete(user);
-      }
-    }
-  }
-
-  const recentAttempts = (messageAttemptsByUser.get(userId) || [])
-    .filter((timestamp) => timestamp > now - MESSAGE_RATE_WINDOW_MS);
-  if (recentAttempts.length >= MESSAGE_RATE_LIMIT) {
-    messageAttemptsByUser.set(userId, recentAttempts);
-    return false;
-  }
-
-  recentAttempts.push(now);
-  messageAttemptsByUser.set(userId, recentAttempts);
-  return true;
-}
 
 export async function revokeGameChatAccess(gameId, userId) {
   if (!chatIo) return;
@@ -61,7 +39,11 @@ export async function revokeAllGameChatAccess(gameId, reason) {
   );
 }
 
-export function attachChatServer(httpServer, allowedOrigins) {
+export function attachChatServer(
+  httpServer,
+  allowedOrigins,
+  { allowChatMessage = createInMemoryChatRateLimiter() } = {}
+) {
   const io = new Server(httpServer, {
     cors: {
       origin: allowedOrigins,
@@ -117,6 +99,7 @@ export function attachChatServer(httpServer, allowedOrigins) {
       const reply = typeof acknowledge === "function" ? acknowledge : () => {};
 
       try {
+        await expirePastGames();
         const { gameId } = payload || {};
         if (typeof gameId !== "string" || !/^[a-f\d]{24}$/i.test(gameId)) {
           return reply({ ok: false, message: "Invalid game ID" });
@@ -124,7 +107,9 @@ export function attachChatServer(httpServer, allowedOrigins) {
 
         const game = await gameModel.findOne({
           _id: gameId,
-          joinedPlayers: socket.data.userId
+          joinedPlayers: socket.data.userId,
+          status: { $in: ["Open", "Full"] },
+          expiresAt: { $gt: new Date() }
         }).select("_id");
 
         if (!game) {
@@ -154,6 +139,7 @@ export function attachChatServer(httpServer, allowedOrigins) {
       const reply = typeof acknowledge === "function" ? acknowledge : () => {};
 
       try {
+        await expirePastGames();
         const { gameId, content, clientMessageId } = payload || {};
         if (typeof gameId !== "string" || !/^[a-f\d]{24}$/i.test(gameId)) {
           return reply({ ok: false, message: "Invalid game ID" });
@@ -170,7 +156,7 @@ export function attachChatServer(httpServer, allowedOrigins) {
           return reply({ ok: false, message: "Invalid message identifier" });
         }
 
-        if (!allowChatMessage(socket.data.userId)) {
+        if (!(await allowChatMessage(socket.data.userId))) {
           return reply({
             ok: false,
             message: "You are sending messages too quickly. Please wait a moment."
@@ -179,11 +165,16 @@ export function attachChatServer(httpServer, allowedOrigins) {
 
         const game = await gameModel.findOne({
           _id: gameId,
-          joinedPlayers: socket.data.userId
+          joinedPlayers: socket.data.userId,
+          status: { $in: ["Open", "Full"] },
+          expiresAt: { $gt: new Date() }
         }).select("_id joinedPlayers");
 
         const room = roomForGame(gameId);
         if (!game || !socket.rooms.has(room)) {
+          if (socket.rooms.has(room)) {
+            await revokeAllGameChatAccess(gameId, "This game has expired or is no longer active.");
+          }
           return reply({ ok: false, message: "Join this game to send chat messages" });
         }
 

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { io as connectSocket } from "socket.io-client";
 import { bookingModel } from "../src/models/booking.js";
 import { chatMessageModel } from "../src/models/chatMessage.js";
@@ -13,6 +13,15 @@ import { userModel } from "../src/models/user.js";
 import { venueModel } from "../src/models/venue.js";
 import { validateRuntimeConfig } from "../src/config/security.js";
 import { attachChatServer } from "../src/realtime/chatServer.js";
+import { createInMemoryChatRateLimiter, createRedisChatRateLimiter } from "../src/services/chatRateLimiter.js";
+import {
+  resetAuthRateLimitsForTests
+} from "../src/routes/authRoutes.js";
+import {
+  resetVerificationEmailSender,
+  setVerificationEmailSender
+} from "../src/services/emailService.js";
+import { expirePastGames } from "../src/utils/gameExpiry.js";
 import {
   dateKeyInTimeZone,
   dateRangeForBooking,
@@ -29,6 +38,7 @@ databaseUrl.pathname = `/${databaseName}`;
 
 let baseUrl;
 let server;
+const verificationOutbox = [];
 
 function tokenFor(userId) {
   return jwt.sign({ userId: userId.toString() }, process.env.JWT_SECRET, {
@@ -64,6 +74,8 @@ async function request(path, { method = "GET", token, body } = {}) {
 }
 
 before(async () => {
+  process.env.FRONTEND_ORIGIN ||= "http://localhost:5173";
+  setVerificationEmailSender(async (email) => verificationOutbox.push(email));
   await mongoose.connect(databaseUrl.toString());
   await Promise.all([
     userModel.syncIndexes(),
@@ -75,7 +87,9 @@ before(async () => {
 
   const { default: app, allowedOrigins } = await import("../src/app.js");
   server = createServer(app);
-  attachChatServer(server, allowedOrigins);
+  attachChatServer(server, allowedOrigins, {
+    allowChatMessage: createInMemoryChatRateLimiter()
+  });
   server.listen(0);
   await new Promise((resolve, reject) => {
     server.once("listening", resolve);
@@ -87,6 +101,7 @@ before(async () => {
 });
 
 after(async () => {
+  resetVerificationEmailSender();
   if (server) {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -118,8 +133,15 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
     }
   });
   assert.equal(signup.status, 202);
-  assert.equal(signup.body.message, "If account creation was possible, you can now sign in.");
-  assert.equal((await userModel.findOne({ email })).role, "user");
+  assert.equal(
+    signup.body.message,
+    "If this email can be registered, a verification email has been sent. Existing account holders can sign in."
+  );
+  const createdUser = await userModel.findOne({ email }).select("+verificationTokenHash");
+  assert.equal(createdUser.role, "user");
+  assert.equal(createdUser.emailVerified, false);
+  assert.ok(createdUser.verificationTokenHash);
+  assert.equal(verificationOutbox.length, 1);
   assert.equal(userModel.collection.name, "users");
 
   const duplicate = await request("/signup", {
@@ -132,6 +154,39 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
   });
   assert.equal(duplicate.status, 202);
   assert.equal(duplicate.body.message, signup.body.message);
+  assert.equal(verificationOutbox.length, 2);
+
+  const unverifiedSignIn = await request("/signin", {
+    method: "POST",
+    body: { email, password: "ValidPass123" }
+  });
+  assert.equal(unverifiedSignIn.status, 401);
+
+  const verificationToken = new URL(verificationOutbox[1].verificationUrl).searchParams.get("token");
+  const verified = await request("/verify-email", {
+    method: "POST",
+    body: { token: verificationToken }
+  });
+  assert.equal(verified.status, 200);
+  assert.equal((await userModel.findOne({ email })).emailVerified, true);
+  assert.equal(
+    (await request("/verify-email", { method: "POST", body: { token: verificationToken } })).status,
+    400
+  );
+
+  const expiredToken = randomUUID().replaceAll("-", "").padEnd(64, "a");
+  await userModel.create({
+    name: "Expired Verification",
+    email: `expired-verification-${randomUUID()}@example.test`,
+    password: await bcrypt.hash("ValidPass123", 12),
+    emailVerified: false,
+    verificationTokenHash: createHash("sha256").update(expiredToken).digest("hex"),
+    verificationTokenExpiresAt: new Date(Date.now() - 1000)
+  });
+  assert.equal(
+    (await request("/verify-email", { method: "POST", body: { token: expiredToken } })).status,
+    400
+  );
 
   const signin = await request("/signin", {
     method: "POST",
@@ -162,9 +217,43 @@ test("Helmet sets browser security headers", async () => {
 });
 
 test("signup requires stronger passwords and sign-in attempts are rate limited", async () => {
+  await resetAuthRateLimitsForTests();
   const weakSignup = await request("/signup", {
     method: "POST",
     body: { name: "Weak Password", email: `weak-${randomUUID()}@example.test`, password: "short" }
+  });
+
+  test("Redis chat rate-limit uses a shared atomic counter across limiter instances", async () => {
+    const state = new Map();
+    const fakeClient = {
+      on() {},
+      async eval(_script, { keys, arguments: args }) {
+        const [windowMs, limit, now, member] = args.map((value) => Number.isNaN(Number(value)) ? value : Number(value));
+        const attempts = (state.get(keys[0]) || [])
+          .filter((attempt) => attempt.score > now - windowMs);
+        if (attempts.length >= limit) {
+          state.set(keys[0], attempts);
+          return 0;
+        }
+        attempts.push({ score: now, member });
+        state.set(keys[0], attempts);
+        return 1;
+      },
+      async close() {}
+    };
+    const firstInstance = await createRedisChatRateLimiter({
+      client: fakeClient,
+      limit: 2,
+      windowMs: 10_000
+    });
+    const secondInstance = await createRedisChatRateLimiter({
+      client: fakeClient,
+      limit: 2,
+      windowMs: 10_000
+    });
+    assert.equal(await firstInstance.allowChatMessage("shared-user", 1_000), true);
+    assert.equal(await secondInstance.allowChatMessage("shared-user", 1_001), true);
+    assert.equal(await firstInstance.allowChatMessage("shared-user", 1_002), false);
   });
   assert.equal(weakSignup.status, 400);
 
@@ -354,6 +443,19 @@ test("venue discovery filters by text, price, and available date and slot", asyn
   assert.ok(availableAtTime.body.venues.some((item) => item._id === venue._id.toString()));
   const bookedAtTime = await request(`/venues?date=${date}&slot=17%3A00-18%3A00`);
   assert.ok(!bookedAtTime.body.venues.some((item) => item._id === venue._id.toString()));
+  const availabilityFirstPage = await request(
+    `/venues?search=pagination%20test&date=${date}&slot=18%3A00-19%3A00&limit=1&page=1`
+  );
+  const availabilitySecondPage = await request(
+    `/venues?search=pagination%20test&date=${date}&slot=18%3A00-19%3A00&limit=1&page=2`
+  );
+  assert.equal(availabilityFirstPage.body.pagination.totalItems, 2);
+  assert.equal(availabilityFirstPage.body.venues.length, 1);
+  assert.equal(availabilitySecondPage.body.venues.length, 1);
+  assert.notEqual(
+    availabilityFirstPage.body.venues[0]._id,
+    availabilitySecondPage.body.venues[0]._id
+  );
 
   const invalidFilters = await request("/venues?minPrice=800&maxPrice=100");
   assert.equal(invalidFilters.status, 400);
@@ -862,6 +964,66 @@ test("game chat persists messages and is restricted to joined players", async ()
     });
     assert.equal(deletion.status, 200);
     assert.equal((await adminRevoked).gameId, adminDeletedGame._id.toString());
+
+    const expiryBooking = await bookingModel.create({
+      userId: organizer._id,
+      venueId: venue._id,
+      bookingDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      slot: "20:00-21:00"
+    });
+    const expiryGame = await gameModel.create({
+      title: "Chat Expiry Test",
+      sport: "Football",
+      bookingId: expiryBooking._id,
+      organizerId: organizer._id,
+      maxPlayers: 3,
+      joinedPlayers: [organizer._id],
+      status: "Open"
+    });
+    const expirySocket = connectSocket(baseUrl.replace("/api/v1", ""), {
+      auth: { token: tokenFor(organizer._id) },
+      forceNew: true,
+      reconnection: false
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        expirySocket.once("connect", resolve);
+        expirySocket.once("connect_error", reject);
+      });
+      const expiryJoin = await new Promise((resolve) => {
+        expirySocket.emit("game:join", { gameId: expiryGame._id.toString() }, resolve);
+      });
+      assert.equal(expiryJoin.ok, true);
+
+      const expiryRevoked = new Promise((resolve) => {
+        expirySocket.once("game:access-revoked", resolve);
+      });
+      await Promise.all([
+        bookingModel.updateOne(
+          { _id: expiryBooking._id },
+          { $set: { bookingDate: new Date("2020-01-01T00:00:00.000Z") } }
+        ),
+        gameModel.updateOne(
+          { _id: expiryGame._id },
+          { $set: { expiresAt: new Date(Date.now() - 1000) } }
+        )
+      ]);
+      const expiredHistory = await request(`/games/${expiryGame._id}/messages`, {
+        token: tokenFor(organizer._id)
+      });
+      assert.equal(expiredHistory.status, 404);
+      assert.equal((await expiryRevoked).gameId, expiryGame._id.toString());
+      const expiredSend = await new Promise((resolve) => {
+        expirySocket.emit(
+          "game:message",
+          { gameId: expiryGame._id.toString(), content: "After expiry" },
+          resolve
+        );
+      });
+      assert.equal(expiredSend.ok, false);
+    } finally {
+      expirySocket.disconnect();
+    }
   } finally {
     socket.disconnect();
     adminSocket?.disconnect();
@@ -873,7 +1035,13 @@ test("production configuration rejects missing or weak secrets and missing servi
     nodeEnv: process.env.NODE_ENV,
     jwtSecret: process.env.JWT_SECRET,
     mongoUri: process.env.MONGO_URI,
-    frontendOrigin: process.env.FRONTEND_ORIGIN
+    frontendOrigin: process.env.FRONTEND_ORIGIN,
+    redisUrl: process.env.REDIS_URL,
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: process.env.SMTP_PORT,
+    smtpUser: process.env.SMTP_USER,
+    smtpPass: process.env.SMTP_PASS,
+    emailFrom: process.env.EMAIL_FROM
   };
 
   try {
@@ -881,6 +1049,12 @@ test("production configuration rejects missing or weak secrets and missing servi
     delete process.env.JWT_SECRET;
     delete process.env.MONGO_URI;
     delete process.env.FRONTEND_ORIGIN;
+    delete process.env.REDIS_URL;
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_PORT;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    delete process.env.EMAIL_FROM;
     assert.throws(validateRuntimeConfig, /JWT_SECRET must be configured/);
 
     process.env.JWT_SECRET = "short";
@@ -893,6 +1067,16 @@ test("production configuration rejects missing or weak secrets and missing servi
     assert.throws(validateRuntimeConfig, /FRONTEND_ORIGIN must be configured/);
 
     process.env.FRONTEND_ORIGIN = "https://nexplay.example";
+    assert.throws(validateRuntimeConfig, /REDIS_URL must be configured/);
+
+    process.env.REDIS_URL = "redis://localhost:6379";
+    assert.throws(validateRuntimeConfig, /SMTP_HOST must be configured/);
+
+    process.env.SMTP_HOST = "smtp.example.test";
+    process.env.SMTP_PORT = "587";
+    process.env.SMTP_USER = "user";
+    process.env.SMTP_PASS = "pass";
+    process.env.EMAIL_FROM = "nexplay@example.test";
     assert.doesNotThrow(validateRuntimeConfig);
   } finally {
     if (original.nodeEnv === undefined) delete process.env.NODE_ENV;
@@ -906,5 +1090,17 @@ test("production configuration rejects missing or weak secrets and missing servi
 
     if (original.frontendOrigin === undefined) delete process.env.FRONTEND_ORIGIN;
     else process.env.FRONTEND_ORIGIN = original.frontendOrigin;
+    if (original.redisUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = original.redisUrl;
+    if (original.smtpHost === undefined) delete process.env.SMTP_HOST;
+    else process.env.SMTP_HOST = original.smtpHost;
+    if (original.smtpPort === undefined) delete process.env.SMTP_PORT;
+    else process.env.SMTP_PORT = original.smtpPort;
+    if (original.smtpUser === undefined) delete process.env.SMTP_USER;
+    else process.env.SMTP_USER = original.smtpUser;
+    if (original.smtpPass === undefined) delete process.env.SMTP_PASS;
+    else process.env.SMTP_PASS = original.smtpPass;
+    if (original.emailFrom === undefined) delete process.env.EMAIL_FROM;
+    else process.env.EMAIL_FROM = original.emailFrom;
   }
 });

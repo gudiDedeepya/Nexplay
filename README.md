@@ -78,6 +78,10 @@ Run `npm test` with a local MongoDB server available. The integration tests crea
 
 In production, set `JWT_SECRET` to a random value of at least 32 characters, plus explicit `MONGO_URI` and `FRONTEND_ORIGIN` values. The server will refuse to start if any are missing.
 
+New accounts must verify their email before signing in. Configure an SMTP provider with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`; verification links point to the first origin in `FRONTEND_ORIGIN`. Existing accounts remain verified for compatibility.
+
+Chat message rate limits are shared across backend instances through Redis. Set `REDIS_URL` to a reachable Redis service URL; production startup fails if it is missing.
+
 The backend creates unique database indexes to prevent duplicate active venue bookings and duplicate games for one booking. If older database records already violate either rule, startup fails and the duplicates must be reviewed and resolved before the indexes can be created.
 
 ## Deploy the backend on Render
@@ -88,11 +92,13 @@ Configure the Render web service with:
 - Build command: `npm install`
 - Start command: `npm start`
 - Environment: `NODE_ENV=production`
-- Required environment variables: `MONGO_URI`, `JWT_SECRET` (at least 32 characters), and `FRONTEND_ORIGIN` (the deployed frontend's exact origin)
+- Required environment variables: `MONGO_URI`, `JWT_SECRET` (at least 32 characters), `FRONTEND_ORIGIN` (the deployed frontend's exact origin), `REDIS_URL`, and SMTP settings `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`
 
 Do not use `npm run dev` as the Render start command; that runs the development-only nodemon watcher. Render supplies the `PORT` variable automatically.
 
 The backend uses Socket.IO over the same Render web service for game chat. `FRONTEND_ORIGIN` must include each frontend origin allowed to connect (comma-separated, with no paths), including the production Vercel domain and any Vercel preview domain you use.
+
+Provision a Redis service reachable from Render and use its private connection URL when available. Configure SMTP credentials for a provider that permits sending verification emails, and set `EMAIL_FROM` to an address authorized by that provider. The server will not start in production without both services configured.
 
 ## Notes
 

@@ -2,8 +2,8 @@ import express from "express";
 import mongoose from "mongoose";
 import { bookingModel } from "../models/booking.js";
 import { venueModel } from "../models/venue.js";
-import { getVenueSlots } from "../utils/venueSlots.js";
 import { getPagination, paginationDetails } from "../utils/pagination.js";
+import { getVenueSlots } from "../utils/venueSlots.js";
 import {
   addCalendarDays,
   BOOKING_TIME_ZONE,
@@ -107,31 +107,99 @@ router.get("/", async (req, res, next) => {
     let venues;
     let totalItems;
     if (date !== undefined) {
-      venues = await venueModel.find(filter).sort({ createdAt: -1, _id: 1 });
       const { start: startOfDay, end: endOfDay } = dateRangeForBooking(date);
-      const bookings = await bookingModel.find({
-        venueId: { $in: venues.map((venue) => venue._id) },
-        bookingDate: { $gte: startOfDay, $lt: endOfDay },
-        status: "Booked"
-      }).select("venueId slot");
-      const bookedByVenue = new Map();
-      for (const booking of bookings) {
-        const venueId = booking.venueId.toString();
-        if (!bookedByVenue.has(venueId)) bookedByVenue.set(venueId, new Set());
-        bookedByVenue.get(venueId).add(booking.slot);
-      }
       const currentMinutes = minutesInTimeZone(new Date(), BOOKING_TIME_ZONE);
-      venues = venues.filter((venue) => {
-        const bookedSlots = bookedByVenue.get(venue._id.toString()) || new Set();
-        const availableSlots = getVenueSlots(venue.operatingHours).filter((venueSlot) => {
-          const startHour = Number(venueSlot.slice(0, 2));
-          const hasNotPassed = date !== todayKey || startHour * 60 > currentMinutes;
-          return hasNotPassed && !bookedSlots.has(venueSlot);
-        });
-        return slot ? availableSlots.includes(slot) : availableSlots.length > 0;
-      });
-      totalItems = venues.length;
-      venues = venues.slice(pagination.skip, pagination.skip + pagination.limit);
+      const openHour = { $toInt: { $substrBytes: ["$operatingHours.open", 0, 2] } };
+      const closeHour = { $toInt: { $substrBytes: ["$operatingHours.close", 0, 2] } };
+      const pipeline = [
+        { $match: filter },
+        {
+          $lookup: {
+            from: bookingModel.collection.name,
+            let: { venueId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$venueId", "$$venueId"] },
+                      { $gte: ["$bookingDate", startOfDay] },
+                      { $lt: ["$bookingDate", endOfDay] },
+                      { $eq: ["$status", "Booked"] }
+                    ]
+                  }
+                }
+              },
+              { $project: { _id: 0, slot: 1 } }
+            ],
+            as: "bookedSlots"
+          }
+        },
+        {
+          $addFields: {
+            availableSlots: {
+              $filter: {
+                input: {
+                  $map: {
+                    input: { $range: [openHour, closeHour] },
+                    as: "hour",
+                    in: {
+                      $let: {
+                        vars: { endHour: { $add: ["$$hour", 1] } },
+                        in: {
+                          $concat: [
+                            { $cond: [{ $lt: ["$$hour", 10] }, "0", ""] },
+                            { $toString: "$$hour" },
+                            ":00-",
+                            { $cond: [{ $lt: ["$$endHour", 10] }, "0", ""] },
+                            { $toString: "$$endHour" },
+                            ":00"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                as: "venueSlot",
+                cond: {
+                  $and: [
+                    { $not: [{ $in: ["$$venueSlot", "$bookedSlots.slot"] }] },
+                    ...(date === todayKey
+                      ? [{
+                          $gt: [
+                            {
+                              $multiply: [
+                                { $toInt: { $substrBytes: ["$$venueSlot", 0, 2] } },
+                                60
+                              ]
+                            },
+                            currentMinutes
+                          ]
+                        }]
+                      : []),
+                    ...(slot ? [{ $eq: ["$$venueSlot", slot] }] : [])
+                  ]
+                }
+              }
+            }
+          }
+        },
+        { $match: { "availableSlots.0": { $exists: true } } },
+        {
+          $facet: {
+            venues: [
+              { $sort: { createdAt: -1, _id: 1 } },
+              { $skip: pagination.skip },
+              { $limit: pagination.limit },
+              { $project: { bookedSlots: 0, availableSlots: 0 } }
+            ],
+            metadata: [{ $count: "totalItems" }]
+          }
+        }
+      ];
+      const [result] = await venueModel.aggregate(pipeline);
+      venues = result?.venues || [];
+      totalItems = result?.metadata[0]?.totalItems || 0;
     } else {
       [totalItems, venues] = await Promise.all([
         venueModel.countDocuments(filter),

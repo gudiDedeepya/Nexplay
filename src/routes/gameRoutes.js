@@ -113,6 +113,7 @@ router.get("/:gameId/messages", auth, async (req, res, next) => {
     if (!mongoose.isValidObjectId(req.params.gameId)) {
       return res.status(400).json({ message: "Invalid game ID" });
     }
+    await expirePastGames();
 
     const parsedLimit = Number.parseInt(req.query.limit, 10);
     const limit = Number.isNaN(parsedLimit) ? 40 : Math.max(1, Math.min(parsedLimit, 100));
@@ -126,7 +127,11 @@ router.get("/:gameId/messages", auth, async (req, res, next) => {
       }
     }
 
-    const game = await gameModel.findById(req.params.gameId).select("joinedPlayers");
+    const game = await gameModel.findOne({
+      _id: req.params.gameId,
+      status: { $in: ["Open", "Full"] },
+      expiresAt: { $gt: new Date() }
+    }).select("joinedPlayers");
     if (!game) {
       return res.status(404).json({ message: "Game not found" });
     }

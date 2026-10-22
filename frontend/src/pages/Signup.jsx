@@ -1,23 +1,29 @@
 ﻿import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 
 function Signup() {
-  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [location, setLocation] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSignup(e) {
     e.preventDefault();
 
+    setLoading(true);
+    setMessage("");
+    setError("");
     try {
       await api.post("/signup", { name, email, password, location });
-      alert("If account creation was possible, you can now sign in.");
-      navigate("/");
+      setMessage("If this email can be registered, we sent a verification link. Check your inbox. Already registered? Sign in.");
     } catch (error) {
-      alert(error.response?.data?.message || "Signup Failed");
+      setError(error.response?.data?.message || "Signup failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -28,6 +34,8 @@ function Signup() {
         <p className="text-gray-400 text-center mt-2">Create your account</p>
 
         <form onSubmit={handleSignup} className="mt-8 space-y-5">
+          {message && <p role="status" className="rounded-lg bg-emerald-950 p-3 text-sm text-emerald-200">{message}</p>}
+          {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-200">{error}</p>}
           <input
             type="text"
             placeholder="Name"
@@ -66,8 +74,8 @@ function Signup() {
             className="w-full p-3 rounded-lg bg-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
 
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 transition p-3 rounded-lg font-semibold text-white">
-            Signup
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 transition p-3 rounded-lg font-semibold text-white disabled:opacity-50">
+            {loading ? "Sending verification..." : "Signup"}
           </button>
         </form>
 

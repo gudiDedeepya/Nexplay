@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import VerifyEmail from "./pages/VerifyEmail";
 import Home from "./pages/Home";
 import Venues from "./pages/Venues";
 import Games from "./pages/Games";
@@ -22,6 +23,7 @@ function App() {
           <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route
             path="/home"
