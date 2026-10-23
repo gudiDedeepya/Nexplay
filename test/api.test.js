@@ -632,7 +632,8 @@ test("past games expire and cannot be created from a booking in the past", async
     organizerId: organizer._id,
     maxPlayers: 4,
     joinedPlayers: [organizer._id],
-    status: "Open"
+    status: "Open",
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   });
 
   const openGames = await request("/games");
