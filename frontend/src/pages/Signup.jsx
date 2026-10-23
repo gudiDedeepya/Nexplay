@@ -1,13 +1,13 @@
 ﻿import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 function Signup() {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [location, setLocation] = useState("");
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -15,11 +15,10 @@ function Signup() {
     e.preventDefault();
 
     setLoading(true);
-    setMessage("");
     setError("");
     try {
       const { data } = await api.post("/signup", { name, email, password, location });
-      setMessage(data.message);
+      navigate("/", { state: { signupSuccess: data.message } });
     } catch (error) {
       setError(error.response?.data?.message || "Signup failed. Please try again.");
     } finally {
@@ -34,7 +33,6 @@ function Signup() {
         <p className="text-gray-400 text-center mt-2">Create your account</p>
 
         <form onSubmit={handleSignup} className="mt-8 space-y-5">
-          {message && <p role="status" className="rounded-lg bg-emerald-950 p-3 text-sm text-emerald-200">{message}</p>}
           {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-200">{error}</p>}
           <input
             type="text"
@@ -63,7 +61,7 @@ function Signup() {
             className="w-full p-3 rounded-lg bg-slate-700 text-white outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="-mt-3 text-xs text-slate-400">
-            Use at least 12 characters. Sessions expire after one hour.
+            Use at least 12 characters.
           </p>
 
           <input

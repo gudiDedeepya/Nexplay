@@ -384,6 +384,12 @@ test("venue discovery filters by text, price, and available date and slot", asyn
   const locationSearch = await request("/venues?search=tirupati");
   assert.ok(locationSearch.body.venues.some((item) => item._id === venue._id.toString()));
   assert.ok(!locationSearch.body.venues.some((item) => item._id === otherVenue._id.toString()));
+  const sportWithoutPrices = await request("/venues?sport=Tennis&minPrice=&maxPrice=");
+  assert.equal(sportWithoutPrices.status, 200);
+  assert.ok(sportWithoutPrices.body.venues.some((item) => item._id === venue._id.toString()));
+  const searchWithoutPrices = await request("/venues?search=river&minPrice=&maxPrice=");
+  assert.equal(searchWithoutPrices.status, 200);
+  assert.ok(searchWithoutPrices.body.venues.some((item) => item._id === venue._id.toString()));
   const firstPage = await request("/venues?search=pagination%20test&limit=1&page=1");
   const secondPage = await request("/venues?search=pagination%20test&limit=1&page=2");
   assert.equal(firstPage.body.venues.length, 1);

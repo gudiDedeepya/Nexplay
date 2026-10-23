@@ -62,9 +62,9 @@ router.get("/", async (req, res, next) => {
 
     const priceFilter = {};
     for (const [key, value] of [["minPrice", minPrice], ["maxPrice", maxPrice]]) {
-      if (value !== undefined) {
+      if (value !== undefined && !(typeof value === "string" && value.trim() === "")) {
         const amount = Number(value);
-        if (!Number.isFinite(amount) || amount < 0) {
+        if (typeof value !== "string" || !Number.isFinite(amount) || amount < 0) {
           return res.status(400).json({ message: "Price filters must be non-negative numbers." });
         }
         priceFilter[key === "minPrice" ? "$gte" : "$lte"] = amount;
