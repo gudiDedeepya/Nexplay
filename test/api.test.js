@@ -134,12 +134,15 @@ test("signup validates input, creates users, and rejects duplicate emails", asyn
     method: "POST",
     body: {
       name: "Signup Player",
-      email,
+      email: email.toUpperCase(),
       password: "ValidPass123"
     }
   });
-  assert.equal(duplicate.status, 201);
-  assert.equal(duplicate.body.message, signup.body.message);
+  assert.equal(duplicate.status, 409);
+  assert.equal(
+    duplicate.body.message,
+    "This email is already registered. Please sign in."
+  );
 
   const signin = await request("/signin", {
     method: "POST",

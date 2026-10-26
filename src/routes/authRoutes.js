@@ -37,6 +37,11 @@ router.post("/signup", signupLimiter, async (req, res, next) => {
 
     const { name, email, password, location } = req.body;
     const normalizedEmail = email.toLowerCase();
+    const existingUser = await userModel.exists({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(409).json({ message: "This email is already registered. Please sign in." });
+    }
+
     try {
       await userModel.create({
         name,
@@ -45,7 +50,12 @@ router.post("/signup", signupLimiter, async (req, res, next) => {
         location: location || ""
       });
     } catch (error) {
-      if (error.code !== 11000) throw error;
+      if (error.code === 11000) {
+        return res.status(409).json({
+          message: "This email is already registered. Please sign in."
+        });
+      }
+      throw error;
     }
 
     return res.status(201).json({
