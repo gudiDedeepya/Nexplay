@@ -26,11 +26,11 @@ function Login() {
       const actualRole = me.user?.role || "player";
       if (actualRole !== loginRole) {
         logout();
-        throw new Error(loginRole === "admin" ? "Invalid credentials: this account is not an admin." : "Invalid credentials: this account is an admin. Select Admin.");
+        throw new Error("Invalid credentials");
       }
       navigate(actualRole === "admin" ? "/admin" : "/home", { replace: true });
     } catch (error) {
-      setError(error.response?.data?.message || error.message || "Login failed. Please try again.");
+      setError(error.response?.status === 401 ? "Invalid credentials" : error.message === "Invalid credentials" ? "Invalid credentials" : "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

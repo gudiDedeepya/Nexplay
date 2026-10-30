@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   });
   const [roleState, setRoleState] = useState({ token: null, role: null });
   const role = roleState.token === token ? roleState.role : null;
+  const roleLoading = Boolean(token) && roleState.token !== token;
 
   useEffect(() => {
     const syncToken = () => setToken(sessionStorage.getItem("token"));
@@ -54,11 +55,12 @@ export function AuthProvider({ children }) {
       token,
       isAuthenticated: Boolean(token),
       role,
+      roleLoading,
       isAdmin: role === "admin",
       login,
       logout
     }),
-    [token, role]
+    [token, role, roleLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

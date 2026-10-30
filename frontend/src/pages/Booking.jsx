@@ -88,7 +88,7 @@ function Booking() {
         setBookingLoading(true);
         setBookingError("");
         try {
-            const response = await api.post("/bookings", {
+            await api.post("/bookings", {
                 venueId,
                 bookingDate: date,
                 slot: selectedSlot

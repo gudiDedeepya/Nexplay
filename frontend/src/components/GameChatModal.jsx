@@ -127,7 +127,7 @@ function GameChatModal({ game, onClose }) {
             socket.off("connect_error", handleConnectError);
             socket.off("disconnect", handleDisconnect);
         };
-    }, [game._id, loadLatestMessages, markRead, socket]);
+    }, [game._id, gameExpired, loadLatestMessages, markRead, socket]);
 
     useLayoutEffect(() => {
         const container = messagesContainerRef.current;
