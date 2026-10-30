@@ -52,24 +52,20 @@ function GameCardProfile({ game, canLeave = false, onLeave }) {
 
             <div className="mt-5 space-y-3 text-sm text-slate-300">
                 <p className="flex gap-3">
-                    <span aria-hidden="true">🏟️</span>
                     <span>{venue?.name || "Venue details unavailable"}</span>
                 </p>
                 {venue?.location && (
                     <p className="flex gap-3">
-                        <span aria-hidden="true">📍</span>
                         <span>{venue.location}</span>
                     </p>
                 )}
                 {booking?.bookingDate && (
                     <p className="flex gap-3">
-                        <span aria-hidden="true">📅</span>
                         <span>{formatBookingDate(booking.bookingDate)}</span>
                     </p>
                 )}
                 {booking?.slot && (
                     <p className="flex gap-3">
-                        <span aria-hidden="true">🕒</span>
                         <span>{booking.slot}</span>
                     </p>
                 )}

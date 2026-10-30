@@ -55,7 +55,7 @@ function VenueCard({ venue }) {
 
                 <p className="text-gray-400 mt-2">
 
-                    📍 {venue.location}
+                    {venue.location}
 
                 </p>
 

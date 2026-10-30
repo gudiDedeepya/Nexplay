@@ -7,27 +7,27 @@ function SportsSection() {
     const sports = [
         {
             name: "Cricket",
-            icon: "🏏",
+            icon: "CR",
             description: "Book cricket grounds near you."
         },
         {
             name: "Football",
-            icon: "⚽",
+            icon: "FB",
             description: "Join football matches nearby."
         },
         {
             name: "Badminton",
-            icon: "🏸",
+            icon: "BD",
             description: "Smash it like a pro."
         },
         {
             name: "Basketball",
-            icon: "🏀",
+            icon: "BB",
             description: "Book indoor & outdoor courts."
         },
         {
             name: "Kabaddi",
-            icon: "🤼",
+            icon: "KB",
             description: "Find players and compete."
         }
     ];
@@ -54,7 +54,7 @@ function SportsSection() {
                         className="bg-slate-900 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-blue-500 hover:-translate-y-2 transition-all duration-300"
                     >
 
-                        <div className="text-5xl mb-5">
+                        <div className="mb-5 flex size-14 items-center justify-center border-l-4 border-[#d8e500] bg-[#090909] font-display text-2xl font-black text-[#d8e500]">
                             {sport.icon}
                         </div>
 

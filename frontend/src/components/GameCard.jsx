@@ -41,7 +41,7 @@ function GameCard({ game, refreshGames }) {
 
             <h2 className="text-2xl font-bold text-white">
 
-                🏏 {game.title}
+                {game.title}
 
             </h2>
 
@@ -55,7 +55,7 @@ function GameCard({ game, refreshGames }) {
 
                 <p>
 
-                    🏟️ <span className="font-semibold">
+                    <span className="font-semibold">
                         {game.bookingId?.venueId?.name}
                     </span>
 
@@ -63,25 +63,25 @@ function GameCard({ game, refreshGames }) {
 
                 <p>
 
-                    📍 {game.bookingId?.venueId?.location}
+                    {game.bookingId?.venueId?.location}
 
                 </p>
 
                 <p>
 
-                    📅 {formatBookingDate(game.bookingId?.bookingDate)}
+                    {formatBookingDate(game.bookingId?.bookingDate)}
 
                 </p>
 
                 <p>
 
-                    🕒 {game.bookingId?.slot}
+                    {game.bookingId?.slot}
 
                 </p>
 
                 <p>
 
-                    👤 Organizer :
+                    Organizer :
                     {" "}
                     <span className="font-semibold">
 
@@ -93,7 +93,7 @@ function GameCard({ game, refreshGames }) {
 
                 <p>
 
-                    👥 Players :
+                    Players :
                     {" "}
                     {game.joinedPlayers.length}
                     {" / "}
@@ -103,7 +103,7 @@ function GameCard({ game, refreshGames }) {
 
                 <p>
 
-                    🎯 Skill :
+                    Skill :
                     {" "}
                     {game.skillLevel}
 
@@ -111,7 +111,7 @@ function GameCard({ game, refreshGames }) {
 
                 <p>
 
-                    🟢 Status :
+                    Status :
                     {" "}
                     <span className="text-green-400">
 
@@ -131,7 +131,7 @@ function GameCard({ game, refreshGames }) {
 
                     <p className="text-gray-400">
 
-                        📝 {game.description}
+                        {game.description}
 
                     </p>
 

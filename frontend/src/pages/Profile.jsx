@@ -169,9 +169,9 @@ function Profile() {
 
                 <section aria-label="Dashboard summary" className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     {[
-                        { label: "Active bookings", value: activeBookings.length, icon: "📅" },
-                        { label: "Games created", value: myGames.length, icon: "🏆" },
-                        { label: "Games joined", value: joinedGames.length, icon: "🤝" }
+                        { label: "Active bookings", value: activeBookings.length, icon: "AB" },
+                        { label: "Games created", value: myGames.length, icon: "GC" },
+                        { label: "Games joined", value: joinedGames.length, icon: "GJ" }
                     ].map((stat) => (
                         <div key={stat.label} className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
                             <div className="flex items-center justify-between">
@@ -251,7 +251,7 @@ function Profile() {
                         ) : activeItems.length === 0 ? (
                             <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 px-6 py-14 text-center">
                                 <p className="text-4xl" aria-hidden="true">
-                                    {activeSection === "bookings" ? "📍" : activeSection === "created" ? "🎮" : "🤝"}
+                                    {activeSection === "bookings" ? "AB" : activeSection === "created" ? "GC" : "GJ"}
                                 </p>
                                 <h3 className="mt-4 text-xl font-bold">{emptyState.title}</h3>
                                 <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">

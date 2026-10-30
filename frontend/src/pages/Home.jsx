@@ -79,11 +79,7 @@ function Home(){
 
                     <div>
 
-                        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl h-[450px] flex justify-center items-center text-8xl">
-
-                            ⚽🏏🏀🎾
-
-                        </div>
+                        <div className="h-[450px] rounded-3xl border border-[#292b25] bg-[#151713]" />
 
                     </div>
 

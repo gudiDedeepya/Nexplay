@@ -50,16 +50,16 @@ function BookingCard({ booking, onCreateGame, refreshBookings }) {
             <div className="mt-5 space-y-3 text-sm text-slate-300">
                 {venue?.location && (
                     <p className="flex gap-3">
-                        <span aria-hidden="true">📍</span>
+                        
                         <span>{venue.location}</span>
                     </p>
                 )}
                 <p className="flex gap-3">
-                    <span aria-hidden="true">📅</span>
+                    
                     <span>{formatBookingDate(booking.bookingDate)}</span>
                 </p>
                 <p className="flex gap-3">
-                    <span aria-hidden="true">🕒</span>
+                    
                     <span>{booking.slot}</span>
                 </p>
                 {venue?.pricePerHour !== undefined && (
