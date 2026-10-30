@@ -39,7 +39,9 @@ function GameChatModal({ game, onClose }) {
     const shouldScrollToBottomRef = useRef(true);
     const preserveScrollRef = useRef(null);
     const initialHistoryLoadedRef = useRef(false);
-    const chatReady = chatJoined && Boolean(socket?.connected);
+    const gameExpired = game.status === "Expired" || game.status === "Cancelled";
+    const expiredMessage = game.status === "Expired" ? "This game has expired." : "This game is no longer active.";
+    const chatReady = !gameExpired && chatJoined && Boolean(socket?.connected);
 
     const loadLatestMessages = useCallback(async () => {
         setHistoryLoading(true);
@@ -71,7 +73,7 @@ function GameChatModal({ game, onClose }) {
     }, [game._id, markRead, setActiveGameId]);
 
     useEffect(() => {
-        if (!socket) return undefined;
+        if (gameExpired || !socket) return undefined;
 
         let active = true;
         const joinChat = () => {
@@ -229,8 +231,8 @@ function GameChatModal({ game, onClose }) {
                             <div className="flex items-center gap-2 text-sm text-slate-400">
                                 <span>{game.sport}</span>
                                 <span aria-hidden="true">·</span>
-                                <span className={chatReady ? "text-emerald-400" : "text-amber-300"}>
-                                    {chatReady ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting..." : "Connecting..."}
+                                <span className={gameExpired ? "text-red-300" : chatReady ? "text-emerald-400" : "text-amber-300"}>
+                                    {gameExpired ? "Game expired" : chatReady ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting..." : "Connecting..."}
                                 </span>
                             </div>
                         </div>
@@ -246,7 +248,12 @@ function GameChatModal({ game, onClose }) {
                 </header>
 
                 <div ref={messagesContainerRef} className="flex-1 space-y-3 overflow-y-auto bg-slate-950/80 px-3 py-5 sm:px-8">
-                    {hasMore && !accessRevoked && (
+                    {gameExpired && (
+                        <div role="status" className="rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-center font-semibold text-red-200">
+                            {expiredMessage}
+                        </div>
+                    )}
+                    {hasMore && !accessRevoked && !gameExpired && (
                         <div className="flex justify-center pb-2">
                             <button
                                 type="button"

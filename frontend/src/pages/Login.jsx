@@ -6,11 +6,12 @@ import api from "../services/api";
 function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginRole, setLoginRole] = useState("player");
   const signupMessage = location.state?.signupSuccess || "";
 
   async function handleLogin(e) {
@@ -21,9 +22,15 @@ function Login() {
     try {
       const response = await api.post("/signin", { email, password });
       login(response.data.token);
-      navigate("/home");
+      const { data: me } = await api.get("/me");
+      const actualRole = me.user?.role || "player";
+      if (actualRole !== loginRole) {
+        logout();
+        throw new Error(loginRole === "admin" ? "Invalid credentials: this account is not an admin." : "Invalid credentials: this account is an admin. Select Admin.");
+      }
+      navigate(actualRole === "admin" ? "/admin" : "/home", { replace: true });
     } catch (error) {
-      setError(error.response?.data?.message || "Login failed. Please try again.");
+      setError(error.response?.data?.message || error.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -36,6 +43,13 @@ function Login() {
         <p className="text-gray-400 text-center mt-2">Play. Book. Connect.</p>
 
         <form onSubmit={handleLogin} className="mt-8 space-y-5">
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-950 p-1" role="group" aria-label="Login role">
+            {["player", "admin"].map((role) => (
+              <button key={role} type="button" onClick={() => setLoginRole(role)} className={`rounded-md py-2 text-sm font-semibold capitalize ${loginRole === role ? "bg-blue-600 text-white" : "text-slate-400"}`}>
+                {role}
+              </button>
+            ))}
+          </div>
           {signupMessage && <p role="status" className="rounded-lg bg-emerald-950 p-3 text-sm text-emerald-200">{signupMessage}</p>}
           {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-200">{error}</p>}
           <input

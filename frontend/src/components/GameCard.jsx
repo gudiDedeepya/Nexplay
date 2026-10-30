@@ -3,9 +3,15 @@ import { useState } from "react";
 import GameChatModal from "./GameChatModal";
 import { useGameChat } from "../hooks/useGameChat";
 import { formatBookingDate } from "../utils/bookingDates";
+import { getUserIdFromToken } from "../utils/jwt";
+import { useContext } from "react";
+import { AuthContext } from "../context/authContext";
 
 function GameCard({ game, refreshGames }) {
     const [chatOpen, setChatOpen] = useState(false);
+    const [leaving, setLeaving] = useState(false);
+    const { token } = useContext(AuthContext);
+    const currentUserId = getUserIdFromToken(token || "");
     const { unreadCounts, refreshMembership } = useGameChat();
     const unreadCount = unreadCounts[game._id] || 0;
 
@@ -33,6 +39,20 @@ function GameCard({ game, refreshGames }) {
 
         }
 
+    }
+
+    async function handleLeave() {
+        if (!window.confirm(`Leave "${game.title}"? You will lose access to its game chat.`)) return;
+        setLeaving(true);
+        try {
+            await api.delete(`/games/${game._id}/leave`);
+            await refreshMembership();
+            refreshGames();
+        } catch (error) {
+            alert(error.response?.data?.message || "Unable to leave this game.");
+        } finally {
+            setLeaving(false);
+        }
     }
 
     return (
@@ -141,20 +161,32 @@ function GameCard({ game, refreshGames }) {
 
             <div className="mt-8 flex gap-3">
                 {game.joinedByMe ? (
-                    <button
-                        type="button"
-                        onClick={() => setChatOpen(true)}
-                        className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
-                    >
-                        <span className="inline-flex items-center justify-center gap-2">
-                            Open Game Chat
-                            {unreadCount > 0 && (
-                                <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-                                    {unreadCount > 99 ? "99+" : unreadCount}
-                                </span>
-                            )}
-                        </span>
-                    </button>
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setChatOpen(true)}
+                            className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700"
+                        >
+                            <span className="inline-flex items-center justify-center gap-2">
+                                Open Game Chat
+                                {unreadCount > 0 && (
+                                    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                                        {unreadCount > 99 ? "99+" : unreadCount}
+                                    </span>
+                                )}
+                            </span>
+                        </button>
+                        {(game.organizerId?._id || game.organizerId?.toString()) !== currentUserId && (
+                            <button
+                                type="button"
+                                onClick={handleLeave}
+                                disabled={leaving}
+                                className="rounded-xl border border-red-900 bg-red-950/30 px-4 py-3 font-semibold text-red-300 disabled:opacity-50"
+                            >
+                                {leaving ? "Leaving..." : "Leave game"}
+                            </button>
+                        )}
+                    </>
                 ) : (
                     <button
                         type="button"

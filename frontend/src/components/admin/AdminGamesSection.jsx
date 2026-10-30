@@ -11,6 +11,7 @@ function AdminGamesSection({ games, pagination, onPageChange, onRemoveGame }) {
               <th className="p-4">Game</th>
               <th className="p-4">Organizer</th>
               <th className="p-4">Venue / sport</th>
+              <th className="p-4">Game date</th>
               <th className="p-4">Players</th>
               <th className="p-4">Status</th>
               <th className="p-4">Action</th>
@@ -28,6 +29,9 @@ function AdminGamesSection({ games, pagination, onPageChange, onRemoveGame }) {
                   {game.bookingId?.venueId?.name || "Venue unavailable"}
                   <p className="text-xs text-slate-400">{game.sport}</p>
                 </td>
+                <td className="p-4">
+                  {game.bookingId?.bookingDate ? formatBookingDate(game.bookingId.bookingDate) : "Date unavailable"}
+                </td>
                 <td className="p-4">{game.joinedPlayers?.length || 0} / {game.maxPlayers}</td>
                 <td className="p-4">{game.status}</td>
                 <td className="p-4">
@@ -38,7 +42,7 @@ function AdminGamesSection({ games, pagination, onPageChange, onRemoveGame }) {
               </tr>
             ))}
             {!games.length && (
-              <tr><td className="p-5 text-slate-400" colSpan="6">No community games found.</td></tr>
+              <tr><td className="p-5 text-slate-400" colSpan="7">No community games found.</td></tr>
             )}
           </tbody>
         </table>

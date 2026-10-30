@@ -93,7 +93,7 @@ function Booking() {
                 bookingDate: date,
                 slot: selectedSlot
             });
-            navigate(`/booking/confirmation/${response.data.booking._id}`);
+            navigate("/profile", { state: { bookingSuccess: true } });
         } catch (error) {
             setBookingError(
                 error.response?.data?.message || "Booking failed. Please try again."

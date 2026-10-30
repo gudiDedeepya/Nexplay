@@ -1,9 +1,11 @@
 ﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 
 function Signup() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,8 +19,10 @@ function Signup() {
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.post("/signup", { name, email, password, location });
-      navigate("/", { state: { signupSuccess: data.message } });
+      await api.post("/signup", { name, email, password, location });
+      const { data } = await api.post("/signin", { email, password });
+      login(data.token);
+      navigate("/home", { replace: true });
     } catch (error) {
       setError(error.response?.data?.message || "Signup failed. Please try again.");
     } finally {
