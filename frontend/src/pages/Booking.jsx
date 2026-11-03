@@ -230,7 +230,7 @@ function Booking() {
                                 </button>
                             </div>
 
-                        ) : slots.length === 0 ? (
+                        ) : slots.length === 0 && bookedSlots.length === 0 ? (
 
                             <p className="text-red-400 font-semibold">
 

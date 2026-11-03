@@ -247,13 +247,18 @@ router.get("/:venueId/slots", async (req, res, next) => {
     const bookedSlots = bookings.map((booking) => booking.slot);
     const todayKey = dateKeyInTimeZone(new Date(), BOOKING_TIME_ZONE);
     const currentMinutes = minutesInTimeZone(new Date(), BOOKING_TIME_ZONE);
+    const futureBookedSlots = [...new Set(bookings.map((booking) => booking.slot))]
+      .filter((slot) => {
+        const startHour = Number(slot.slice(0, 2));
+        return parsedDate.dateKey !== todayKey || startHour * 60 > currentMinutes;
+      });
     const availableSlots = getVenueSlots(venue.operatingHours).filter((slot) => {
       const startHour = Number(slot.slice(0, 2));
       const hasNotPassed = parsedDate.dateKey !== todayKey || startHour * 60 > currentMinutes;
-      return hasNotPassed && !bookedSlots.includes(slot);
+      return hasNotPassed && !futureBookedSlots.includes(slot);
     });
 
-    return res.status(200).json({ availableSlots, bookedSlots });
+    return res.status(200).json({ availableSlots, bookedSlots: futureBookedSlots });
   } catch (error) {
     next(error);
   }
