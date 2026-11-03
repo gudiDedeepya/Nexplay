@@ -34,6 +34,26 @@ function Profile() {
     const [activeSection, setActiveSection] = useState("bookings");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [waitlistClock, setWaitlistClock] = useState(() => new Date().getTime());
+
+    useEffect(() => {
+        if (!waitlistEntries.some((entry) => entry.status === "Offered")) return undefined;
+
+        const timer = window.setInterval(() => {
+            setWaitlistClock(new Date().getTime());
+        }, 1000);
+
+        return () => window.clearInterval(timer);
+    }, [waitlistEntries]);
+
+    function offerCountdown(entry) {
+        const remainingSeconds = Math.max(0, Math.ceil(
+            (new Date(entry.offerExpiresAt).getTime() - waitlistClock) / 1000
+        ));
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    }
 
     const loadDashboard = useCallback(async () => {
         setLoading(true);
@@ -333,6 +353,12 @@ function Profile() {
                                             ) : (
                                                 <div className="mt-5 rounded-xl border border-[#b6c91a]/20 bg-black/20 p-3">
                                                     <p className="text-xs text-slate-300">This slot is held for you for 5 minutes.</p>
+                                                    <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-950/70 px-3 py-2">
+                                                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Offer expires in</span>
+                                                        <span className="font-mono text-lg font-bold text-[#c9d946]" aria-live="polite">
+                                                            {offerCountdown(entry)}
+                                                        </span>
+                                                    </div>
                                                     <button type="button" onClick={() => acceptWaitlistOffer(entry._id)} className="mt-3 w-full rounded-lg bg-[#b6c91a] px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-[#c9d946]">
                                                         Accept slot
                                                     </button>
