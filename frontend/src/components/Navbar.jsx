@@ -15,7 +15,7 @@ function Navbar() {
   return (
     <nav className="bg-slate-950 border-b border-slate-800">
       <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-        <h1 className="text-3xl md:text-4xl font-black text-blue-500"><span className="mr-2 inline-block h-3 w-3 rounded-full bg-[#d8e500]" />NEXPLAY</h1>
+        <h1 className="text-3xl md:text-4xl font-black text-blue-500"><span className="mr-2 inline-block h-3 w-3 rounded-full bg-[#b6c91a]" />NEXPLAY</h1>
 
         <div className="hidden md:flex gap-10 items-center uppercase text-white font-bold tracking-[.08em]">
           <NavLink to="/home" className={({ isActive }) => isActive ? "text-blue-400" : "hover:text-blue-500"}>Home</NavLink>

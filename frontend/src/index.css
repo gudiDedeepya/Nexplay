@@ -1,22 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
   color: #f5f5f2;
   background: #090909;
-  font-family: "Barlow", sans-serif;
+  font-family: "DM Sans", sans-serif;
   --nexplay-black: #090909;
   --nexplay-panel: #151713;
   --nexplay-panel-soft: #1d1f19;
   --nexplay-line: #292b25;
   --nexplay-muted: #858a83;
-  --nexplay-acid: #d8e500;
+  --nexplay-acid: #b6c91a;
 }
 
 body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--nexplay-black); }
-button, a, input, select, textarea { font-family: "Barlow", sans-serif; }
+button, a, input, select, textarea { font-family: "DM Sans", sans-serif; }
 button { cursor: pointer; }
-h1, h2, h3, h4, .font-display { font-family: "Barlow Condensed", sans-serif; letter-spacing: 0; }
+h1, h2, h3, h4, .font-display { font-family: "Manrope", sans-serif; letter-spacing: -0.025em; }
 .bg-slate-950 { background-color: var(--nexplay-black) !important; }
 .bg-slate-900 { background-color: var(--nexplay-panel) !important; }
 .bg-slate-800 { background-color: var(--nexplay-panel-soft) !important; }
