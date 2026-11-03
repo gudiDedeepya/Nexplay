@@ -11,8 +11,8 @@ const bookingSchema = new mongoose.Schema(
       enum: ["Booked", "Cancelled", "Held"],
       default: "Booked"
     },
-    holdExpiresAt: Date
-    , occupiesSlot: { type: Boolean, default: function () { return this.status !== "Cancelled"; } }
+    holdExpiresAt: Date,
+    occupiesSlot: { type: Boolean, default: function () { return this.status !== "Cancelled"; } }
   },
   { timestamps: true, autoIndex: false }
 );
@@ -21,7 +21,8 @@ bookingSchema.index(
   { venueId: 1, bookingDate: 1, slot: 1 },
   {
     unique: true,
-    partialFilterExpression: { occupiesSlot: true }
+    partialFilterExpression: { occupiesSlot: true },
+    name: "active_booking_per_slot"
   }
 );
 
