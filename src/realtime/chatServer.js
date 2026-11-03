@@ -13,6 +13,14 @@ function roomForGame(gameId) {
 
 let chatIo;
 
+function roomForUser(userId) {
+  return `user:${userId}`;
+}
+
+export function emitToUser(userId, event, payload) {
+  chatIo?.to(roomForUser(userId)).emit(event, payload);
+}
+
 export async function revokeGameChatAccess(gameId, userId) {
   if (!chatIo) return;
 
@@ -88,6 +96,7 @@ export function attachChatServer(
   });
 
   io.on("connection", (socket) => {
+    socket.join(roomForUser(socket.data.userId));
     const expirationTimer = setTimeout(
       () => socket.disconnect(true),
       Math.max(0, socket.data.tokenExpiresAt - Date.now())

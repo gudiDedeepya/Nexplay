@@ -14,6 +14,7 @@ import {
   slotStartInTimeZone
 } from "../utils/bookingDates.js";
 import { revokeAllGameChatAccess } from "../realtime/chatServer.js";
+import { offerNextWaitlist } from "../utils/waitlist.js";
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.post("/", auth, async (req, res, next) => {
         $lt: endOfDay
       },
       slot,
-      status: "Booked"
+      status: { $in: ["Booked", "Held"] }
     });
 
     if (existingBooking) {
@@ -158,7 +159,7 @@ router.delete("/:bookingId", auth, async (req, res, next) => {
 
     const cancelledBooking = await bookingModel.findOneAndUpdate(
       { _id: booking._id, userId: req.userId, status: "Booked" },
-      { $set: { status: "Cancelled" } },
+      { $set: { status: "Cancelled", occupiesSlot: false } },
       { returnDocument: "after" }
     );
     if (!cancelledBooking) {
@@ -170,6 +171,7 @@ router.delete("/:bookingId", auth, async (req, res, next) => {
       await chatMessageModel.deleteMany({ gameId: game._id });
       await revokeAllGameChatAccess(game._id.toString(), "The booking was cancelled.");
     }
+    await offerNextWaitlist(booking.venueId, booking.bookingDate, booking.slot);
 
     return res.status(200).json({ message: "Booking cancelled" });
   } catch (error) {

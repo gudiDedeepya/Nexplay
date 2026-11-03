@@ -7,6 +7,7 @@ import venueRoutes from "./routes/venueRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import gameRoutes from "./routes/gameRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import waitlistRoutes from "./routes/waitlistRoutes.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 
 dotenv.config();
@@ -46,6 +47,7 @@ app.use("/api/v1/venues", venueRoutes);
 app.use("/api/v1/bookings", bookingRoutes);
 app.use("/api/v1/games", gameRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/waitlist", waitlistRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

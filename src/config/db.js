@@ -2,6 +2,7 @@
 import dotenv from "dotenv";
 import { bookingModel } from "../models/booking.js";
 import { gameModel } from "../models/game.js";
+import { waitlistEntryModel } from "../models/waitlistEntry.js";
 
 dotenv.config();
 
@@ -12,7 +13,8 @@ export async function connectDB() {
     await mongoose.connect(mongoUri);
     await Promise.all([
       bookingModel.createIndexes(),
-      gameModel.createIndexes()
+      gameModel.createIndexes(),
+      waitlistEntryModel.createIndexes()
     ]);
     console.log("MongoDB Connected");
   } catch (error) {

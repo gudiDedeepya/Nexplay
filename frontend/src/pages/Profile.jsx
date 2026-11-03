@@ -9,6 +9,7 @@ import api from "../services/api";
 
 const sections = [
     { id: "bookings", label: "Bookings" },
+    { id: "waitlist", label: "Waitlist" },
     { id: "created", label: "Created games" },
     { id: "joined", label: "Joined games" }
 ];
@@ -18,7 +19,8 @@ function fetchDashboardData() {
         api.get("/me"),
         api.get("/bookings/my-bookings"),
         api.get("/games/my-games"),
-        api.get("/games/joined-games")
+        api.get("/games/joined-games"),
+        api.get("/waitlist/mine")
     ]);
 }
 
@@ -27,6 +29,7 @@ function Profile() {
     const [bookings, setBookings] = useState([]);
     const [myGames, setMyGames] = useState([]);
     const [joinedGames, setJoinedGames] = useState([]);
+    const [waitlistEntries, setWaitlistEntries] = useState([]);
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [activeSection, setActiveSection] = useState("bookings");
     const [loading, setLoading] = useState(true);
@@ -36,7 +39,7 @@ function Profile() {
         setLoading(true);
         setError("");
         const results = await fetchDashboardData();
-        const [profileResult, bookingsResult, createdResult, joinedResult] = results;
+        const [profileResult, bookingsResult, createdResult, joinedResult, waitlistResult] = results;
 
         if (profileResult.status === "fulfilled") {
             setUser(profileResult.value.data.user);
@@ -49,6 +52,9 @@ function Profile() {
         }
         if (joinedResult.status === "fulfilled") {
             setJoinedGames(joinedResult.value.data.games);
+        }
+        if (waitlistResult.status === "fulfilled") {
+            setWaitlistEntries(waitlistResult.value.data.entries);
         }
 
         if (results.some((result) => result.status === "rejected")) {
@@ -65,7 +71,7 @@ function Profile() {
             const results = await fetchDashboardData();
             if (cancelled) return;
 
-            const [profileResult, bookingsResult, createdResult, joinedResult] = results;
+            const [profileResult, bookingsResult, createdResult, joinedResult, waitlistResult] = results;
 
             if (profileResult.status === "fulfilled") {
                 setUser(profileResult.value.data.user);
@@ -78,6 +84,9 @@ function Profile() {
             }
             if (joinedResult.status === "fulfilled") {
                 setJoinedGames(joinedResult.value.data.games);
+            }
+            if (waitlistResult.status === "fulfilled") {
+                setWaitlistEntries(waitlistResult.value.data.entries);
             }
 
             if (results.some((result) => result.status === "rejected")) {
@@ -94,6 +103,26 @@ function Profile() {
         };
     }, []);
 
+    useEffect(() => {
+        const handleOffer = () => loadDashboard();
+        window.addEventListener("nexplay:waitlist-offer", handleOffer);
+        return () => window.removeEventListener("nexplay:waitlist-offer", handleOffer);
+    }, [loadDashboard]);
+
+    async function leaveWaitlist(entryId) {
+        await api.delete(`/waitlist/${entryId}`);
+        await loadDashboard();
+    }
+
+    async function acceptWaitlistOffer(entryId) {
+        try {
+            await api.post(`/waitlist/${entryId}/accept`);
+            await loadDashboard();
+        } catch (error) {
+            setError(error.response?.data?.message || "Could not accept the waitlist offer.");
+        }
+    }
+
     const displayName = user?.name || "Player";
     const initials = displayName
         .split(/\s+/)
@@ -105,6 +134,7 @@ function Profile() {
     const activeBookings = bookings.filter((booking) => booking.status === "Booked");
     const activeItems = {
         bookings: activeBookings,
+        waitlist: waitlistEntries,
         created: myGames,
         joined: joinedGames
     }[activeSection];
@@ -127,6 +157,12 @@ function Profile() {
             description: "Browse community games and find a match that suits you.",
             action: "Explore games",
             to: "/games"
+        },
+        waitlist: {
+            title: "No waitlist entries",
+            description: "Join a waitlist from a fully booked venue slot.",
+            action: "Explore venues",
+            to: "/venues"
         }
     };
     const emptyState = emptyStates[activeSection];
@@ -227,9 +263,11 @@ function Profile() {
                                     <span className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
                                         {section.id === "bookings"
                                             ? activeBookings.length
-                                            : section.id === "created"
-                                                ? myGames.length
-                                                : joinedGames.length}
+                                            : section.id === "waitlist"
+                                                ? waitlistEntries.length
+                                                : section.id === "created"
+                                                    ? myGames.length
+                                                    : joinedGames.length}
                                     </span>
                                 </button>
                             ))}
@@ -276,7 +314,27 @@ function Profile() {
                             </div>
                         ) : (
                             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                                {activeSection === "bookings"
+                                {activeSection === "waitlist"
+                                    ? waitlistEntries.map((entry) => (
+                                        <div key={entry._id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                                            <p className="text-lg font-semibold">{entry.venueId?.name || "Venue"}</p>
+                                            <p className="mt-2 text-sm text-slate-400">{entry.slot} · {entry.bookingDate?.slice(0, 10)}</p>
+                                            <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${entry.status === "Offered" ? "bg-amber-400 text-slate-950" : "bg-slate-800 text-slate-300"}`}>
+                                                {entry.status === "Offered" ? "Offer ready - accept now" : entry.status}
+                                            </span>
+                                            {entry.status === "Waiting" && (
+                                                <button type="button" onClick={() => leaveWaitlist(entry._id)} className="mt-5 block text-sm text-slate-300 underline">
+                                                    Leave waitlist
+                                                </button>
+                                            )}
+                                            {entry.status === "Offered" && (
+                                                <button type="button" onClick={() => acceptWaitlistOffer(entry._id)} className="mt-5 rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950">
+                                                    Accept slot
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))
+                                    : activeSection === "bookings"
                                     ? activeBookings.map((booking) => (
                                         <BookingCard
                                             key={booking._id}

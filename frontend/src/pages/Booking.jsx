@@ -16,6 +16,7 @@ function Booking() {
 
     const [date, setDate] = useState("");
     const [slots, setSlots] = useState([]);
+    const [bookedSlots, setBookedSlots] = useState([]);
     const [selectedSlot, setSelectedSlot] = useState("");
     const [dateSelected, setDateSelected] = useState(false);
     const [slotsLoading, setSlotsLoading] = useState(false);
@@ -60,6 +61,7 @@ function Booking() {
 
             if (requestId === slotsRequestId.current) {
                 setSlots(response.data.availableSlots);
+                setBookedSlots(response.data.bookedSlots || []);
             }
         } catch (error) {
             if (requestId === slotsRequestId.current) {
@@ -78,6 +80,16 @@ function Booking() {
         if (!date) {
             setBookingError("Please select a date.");
             return;
+        }
+
+        async function joinWaitlist(slot) {
+            setBookingError("");
+            try {
+                await api.post("/waitlist", { venueId, bookingDate: date, slot });
+                await fetchAvailableSlots(date);
+            } catch (error) {
+                setBookingError(error.response?.data?.message || "Could not join the waitlist.");
+            }
         }
 
         if (!selectedSlot) {
@@ -250,6 +262,17 @@ function Booking() {
 
                                     </button>
 
+                                ))}
+                                {bookedSlots.map((slot) => (
+                                    <button
+                                        key={`waitlist-${slot}`}
+                                        type="button"
+                                        onClick={() => joinWaitlist(slot)}
+                                        className="rounded-xl border border-amber-700/60 bg-amber-950/30 p-4 text-left"
+                                    >
+                                        <span className="block font-semibold">{slot}</span>
+                                        <span className="mt-1 block text-sm text-amber-300">Fully booked - join waitlist</span>
+                                    </button>
                                 ))}
 
                             </div>

@@ -127,6 +127,9 @@ export function GameChatProvider({ children }) {
                 counts: { ...counts, [gameId]: (counts[gameId] || 0) + 1 }
               };
             });
+            chatSocket.on("waitlist:offer", (offer) => {
+              window.dispatchEvent(new CustomEvent("nexplay:waitlist-offer", { detail: offer }));
+            });
           }
         });
 

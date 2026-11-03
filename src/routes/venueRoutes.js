@@ -241,7 +241,7 @@ router.get("/:venueId/slots", async (req, res, next) => {
         $gte: startOfDay,
         $lt: endOfDay
       },
-      status: "Booked"
+      status: { $in: ["Booked", "Held"] }
     });
 
     const bookedSlots = bookings.map((booking) => booking.slot);
@@ -253,7 +253,7 @@ router.get("/:venueId/slots", async (req, res, next) => {
       return hasNotPassed && !bookedSlots.includes(slot);
     });
 
-    return res.status(200).json({ availableSlots });
+    return res.status(200).json({ availableSlots, bookedSlots });
   } catch (error) {
     next(error);
   }
