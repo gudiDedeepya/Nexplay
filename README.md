@@ -5,9 +5,10 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 ## Features
 
 - User signup and signin
-- Generic sign-in and signup responses that avoid exposing account existence
+- Duplicate signups return an explicit response indicating that the email is already registered
 - Helmet security headers and rate limits for signup/sign-in and real-time chat messages
 - Passwords require at least 12 characters; signed-in sessions expire after one hour
+- Successful signup automatically signs the user in and issues a JWT
 - JWT-based protected routes with tokens stored for the current browser tab session
 - Venue listing with name/location search and sport and price filters
 - Venue booking for valid date and slot combinations
@@ -38,7 +39,15 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 
 Copy `.env.example` to `.env` and update values before running the backend.
 
-Example:
+Backend example:
+
+```env
+MONGO_URI=mongodb://127.0.0.1:27017/NEXPLAY
+JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
+FRONTEND_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+REDIS_URL=redis://localhost:6379
+```
+
 Frontend configuration:
 
 ```env
@@ -101,4 +110,4 @@ Provision a Redis service reachable from Render and use its private connection U
 ## Notes
 
 - Authentication tokens are kept in `sessionStorage`, expire after one hour, and are removed when an API request returns 401. There is no refresh-token flow.
-- This project is designed as an MVP and is ready for feature expansion and production hardening.
+- This project is an MVP and may need additional hardening before large-scale production use.
