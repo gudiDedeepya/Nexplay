@@ -110,7 +110,7 @@ function Booking() {
         setBookingError("");
         try {
             await api.post("/waitlist", { venueId, bookingDate: date, slot });
-            await fetchAvailableSlots(date);
+            navigate("/profile", { state: { waitlistJoined: true } });
         } catch (error) {
             setBookingError(error.response?.data?.message || "Could not join the waitlist.");
         }

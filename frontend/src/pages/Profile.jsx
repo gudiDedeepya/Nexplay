@@ -316,21 +316,27 @@ function Profile() {
                             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                                 {activeSection === "waitlist"
                                     ? waitlistEntries.map((entry) => (
-                                        <div key={entry._id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                                            <p className="text-lg font-semibold">{entry.venueId?.name || "Venue"}</p>
-                                            <p className="mt-2 text-sm text-slate-400">{entry.slot} · {entry.bookingDate?.slice(0, 10)}</p>
-                                            <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${entry.status === "Offered" ? "bg-amber-400 text-slate-950" : "bg-slate-800 text-slate-300"}`}>
-                                                {entry.status === "Offered" ? "Offer ready - accept now" : entry.status}
-                                            </span>
-                                            {entry.status === "Waiting" && (
-                                                <button type="button" onClick={() => leaveWaitlist(entry._id)} className="mt-5 block text-sm text-slate-300 underline">
+                                        <div key={entry._id} className={`rounded-2xl border p-5 shadow-lg shadow-black/10 ${entry.status === "Offered" ? "border-emerald-400/60 bg-gradient-to-br from-emerald-950/70 to-slate-900" : "border-slate-800 bg-slate-900"}`}>
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <p className="text-lg font-semibold text-white">{entry.venueId?.name || "Venue"}</p>
+                                                    <p className="mt-1 text-sm text-slate-400">{entry.bookingDate?.slice(0, 10)} · {entry.slot}</p>
+                                                </div>
+                                                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${entry.status === "Offered" ? "bg-[#b6c91a] text-slate-950" : "bg-slate-800 text-slate-300"}`}>
+                                                    {entry.status === "Offered" ? "Slot offered" : entry.status}
+                                                </span>
+                                            </div>
+                                            {entry.status === "Waiting" ? (
+                                                <button type="button" onClick={() => leaveWaitlist(entry._id)} className="mt-5 w-full rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-red-400/60 hover:text-red-300">
                                                     Leave waitlist
                                                 </button>
-                                            )}
-                                            {entry.status === "Offered" && (
-                                                <button type="button" onClick={() => acceptWaitlistOffer(entry._id)} className="mt-5 rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950">
-                                                    Accept slot
-                                                </button>
+                                            ) : (
+                                                <div className="mt-5 rounded-xl border border-[#b6c91a]/20 bg-black/20 p-3">
+                                                    <p className="text-xs text-slate-300">This slot is held for you for 5 minutes.</p>
+                                                    <button type="button" onClick={() => acceptWaitlistOffer(entry._id)} className="mt-3 w-full rounded-lg bg-[#b6c91a] px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-[#c9d946]">
+                                                        Accept slot
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     ))

@@ -11,6 +11,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [loginRole, setLoginRole] = useState("player");
   const signupMessage = location.state?.signupSuccess || "";
 
@@ -84,14 +85,24 @@ function Login() {
 
           <label className="block text-sm text-slate-300">
             Password
-            <input
-            type="password"
-            autoComplete="current-password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-[#34362f] bg-[#1d1f19] px-4 py-3 text-white outline-none transition focus:border-[#b6c91a]"
-            />
+            <div className="relative mt-2">
+              <input
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-[#34362f] bg-[#1d1f19] px-4 py-3 pr-16 text-white outline-none transition focus:border-[#b6c91a]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#c8d64a] hover:text-white"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </label>
           <button type="submit" disabled={loading} className="w-full rounded-lg bg-[#b6c91a] px-4 py-3 font-bold text-[#090909] transition hover:bg-[#c6d827] disabled:cursor-not-allowed disabled:opacity-50">
             {loading ? "Signing in..." : "Login"}
