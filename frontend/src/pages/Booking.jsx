@@ -82,16 +82,6 @@ function Booking() {
             return;
         }
 
-        async function joinWaitlist(slot) {
-            setBookingError("");
-            try {
-                await api.post("/waitlist", { venueId, bookingDate: date, slot });
-                await fetchAvailableSlots(date);
-            } catch (error) {
-                setBookingError(error.response?.data?.message || "Could not join the waitlist.");
-            }
-        }
-
         if (!selectedSlot) {
             setBookingError("Please select a time slot.");
             return;
@@ -113,6 +103,16 @@ function Booking() {
             if (date) await fetchAvailableSlots(date);
         } finally {
             setBookingLoading(false);
+        }
+    }
+
+    async function joinWaitlist(slot) {
+        setBookingError("");
+        try {
+            await api.post("/waitlist", { venueId, bookingDate: date, slot });
+            await fetchAvailableSlots(date);
+        } catch (error) {
+            setBookingError(error.response?.data?.message || "Could not join the waitlist.");
         }
     }
 
