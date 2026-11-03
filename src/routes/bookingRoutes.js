@@ -69,7 +69,9 @@ router.post("/", auth, async (req, res, next) => {
         userId: req.userId,
         venueId,
         bookingDate: parsedDate.utcDate,
-        slot
+        slot,
+        status: "Booked",
+        occupiesSlot: true
       });
     } catch (error) {
       if (error.code === 11000) {

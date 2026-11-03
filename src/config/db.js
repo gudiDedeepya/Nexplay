@@ -38,6 +38,10 @@ async function migrateActiveBookingSlots() {
     { status: "Cancelled" },
     { $set: { occupiesSlot: false } }
   );
+  await bookingModel.updateMany(
+    { status: "Held", holdExpiresAt: { $lte: new Date() } },
+    { $set: { status: "Cancelled", occupiesSlot: false } }
+  );
 
   const indexes = await bookingModel.collection.indexes();
   for (const index of indexes) {
