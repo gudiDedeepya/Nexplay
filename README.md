@@ -5,6 +5,7 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 ## Features
 
 - User signup and signin
+- Password fields include show/hide controls
 - Duplicate signups return an explicit response indicating that the email is already registered
 - Helmet security headers and rate limits for signup/sign-in and real-time chat messages
 - Passwords require at least 12 characters; signed-in sessions expire after one hour
@@ -17,6 +18,11 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - Cancelled bookings are hidden from the player booking list while retained in admin history
 - Cancellation allowed up to 6 hours before the slot starts
 - Duplicate booking protection for concurrent requests
+- Fully booked slots can be joined through a FIFO waitlist
+- Cancellation offers are held for five minutes with a live countdown
+- Expired offers automatically advance to the next waiting player
+- Realtime waitlist offers use authenticated Socket.IO personal rooms
+- Players can view and leave waitlist entries from their profile
 - Community game creation from bookings
 - Games can only be created for future bookings and expire at the booked slot's start time
 - Game join/leave flows, including leaving joined games from the player dashboard
@@ -31,8 +37,9 @@ NexPlay is a sports venue booking and community game platform built with Node.js
 - `src/app.js` – Express app setup and route mounting
 - `src/config/db.js` – MongoDB connection setup
 - `src/middlewares` – auth and error middleware
-- `src/models` – separate Mongoose schemas for users, venues, bookings, games, and chat messages
+- `src/models` – separate Mongoose schemas for users, venues, bookings, games, chat messages, and waitlist entries
 - `src/routes` – auth, venue, booking, game, and admin route modules
+- `src/utils/waitlist.js` – waitlist offer expiry and FIFO advancement
 - `frontend/` – Vite React frontend app
 
 ## Environment variables
@@ -89,7 +96,7 @@ In production, set `JWT_SECRET` to a random value of at least 32 characters, plu
 
 Chat message rate limits are shared across backend instances through Redis. Set `REDIS_URL` to a reachable Redis service URL; production startup fails if it is missing.
 
-The backend creates unique database indexes to prevent duplicate active venue bookings and duplicate games for one booking. If older database records already violate either rule, startup fails and the duplicates must be reviewed and resolved before the indexes can be created.
+The backend creates unique database indexes to prevent duplicate active venue bookings and duplicate games for one booking. Active bookings and temporary waitlist holds occupy the same slot. Startup also migrates existing active booking records to the current slot-lock field. If older database records already violate either rule, startup fails and the duplicates must be reviewed and resolved before the indexes can be created.
 
 ## Deploy the backend on Render
 
@@ -103,7 +110,7 @@ Configure the Render web service with:
 
 Do not use `npm run dev` as the Render start command; that runs the development-only nodemon watcher. Render supplies the `PORT` variable automatically.
 
-The backend uses Socket.IO over the same Render web service for game chat. `FRONTEND_ORIGIN` must include each frontend origin allowed to connect (comma-separated, with no paths), including the production Vercel domain and any Vercel preview domain you use.
+The backend uses Socket.IO over the same Render web service for game chat and waitlist offers. `FRONTEND_ORIGIN` must include each frontend origin allowed to connect (comma-separated, with no paths), including the production Vercel domain and any Vercel preview domain you use.
 
 Provision a Redis service reachable from Render and use its private connection URL when available. The server will not start in production without Redis configured.
 
