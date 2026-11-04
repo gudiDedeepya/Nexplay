@@ -143,6 +143,15 @@ function Profile() {
         }
     }
 
+    async function declineWaitlistOffer(entryId) {
+        try {
+            await api.post(`/waitlist/${entryId}/decline`);
+            await loadDashboard();
+        } catch (error) {
+            setError(error.response?.data?.message || "Could not decline the waitlist offer.");
+        }
+    }
+
     const displayName = user?.name || "Player";
     const initials = displayName
         .split(/\s+/)
@@ -361,6 +370,9 @@ function Profile() {
                                                     </div>
                                                     <button type="button" onClick={() => acceptWaitlistOffer(entry._id)} className="mt-3 w-full rounded-lg bg-[#b6c91a] px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-[#c9d946]">
                                                         Accept slot
+                                                    </button>
+                                                    <button type="button" onClick={() => declineWaitlistOffer(entry._id)} className="mt-2 w-full rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-red-400/60 hover:text-red-300">
+                                                        Decline offer
                                                     </button>
                                                 </div>
                                             )}

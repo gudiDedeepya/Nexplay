@@ -4,7 +4,7 @@ import { bookingModel } from "../models/booking.js";
 import { venueModel } from "../models/venue.js";
 import { waitlistEntryModel } from "../models/waitlistEntry.js";
 import { dateRangeForBooking, parseBookingDate } from "../utils/bookingDates.js";
-import { expireWaitlistOffers } from "../utils/waitlist.js";
+import { expireWaitlistOffers, offerNextWaitlist } from "../utils/waitlist.js";
 
 const router = express.Router();
 
@@ -38,6 +38,13 @@ router.post("/", auth, async (req, res, next) => {
     });
     if (!occupied) {
       return res.status(409).json({ message: "This slot is not fully booked" });
+    }
+    const ownsSlot = await bookingModel.exists({
+      _id: occupied._id,
+      userId: req.userId
+    });
+    if (ownsSlot) {
+      return res.status(409).json({ message: "You already have this slot booked" });
     }
 
     const entry = await waitlistEntryModel.create({
@@ -96,6 +103,38 @@ router.post("/:entryId/accept", auth, async (req, res, next) => {
     entry.status = "Accepted";
     await entry.save();
     res.status(200).json({ message: "Slot accepted", booking });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:entryId/decline", auth, async (req, res, next) => {
+  try {
+    const entry = await waitlistEntryModel.findOneAndUpdate(
+      {
+        _id: req.params.entryId,
+        userId: req.userId,
+        status: "Offered",
+        offerExpiresAt: { $gt: new Date() }
+      },
+      { $set: { status: "Left" } },
+      { returnDocument: "after" }
+    );
+    if (!entry) return res.status(409).json({ message: "Offer has expired or is no longer available" });
+
+    await bookingModel.updateOne(
+      {
+        userId: req.userId,
+        venueId: entry.venueId,
+        bookingDate: entry.bookingDate,
+        slot: entry.slot,
+        status: "Held"
+      },
+      { $set: { status: "Cancelled", occupiesSlot: false } }
+    );
+    await offerNextWaitlist(entry.venueId, entry.bookingDate, entry.slot);
+
+    res.status(200).json({ message: "Offer declined. The next player has been offered the slot." });
   } catch (error) {
     next(error);
   }
