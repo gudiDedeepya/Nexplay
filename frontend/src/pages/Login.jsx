@@ -25,7 +25,8 @@ function Login() {
       login(response.data.token);
       const { data: me } = await api.get("/me");
       const actualRole = me.user?.role || "player";
-      if (actualRole !== loginRole) {
+      const selectedRole = loginRole === "player" ? "user" : loginRole;
+      if (actualRole !== selectedRole) {
         logout();
         throw new Error("Invalid credentials");
       }
